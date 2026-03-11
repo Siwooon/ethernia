@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="100%" height="100%">
+  <defs>
+    <radialGradient id="portalGlow" cx="50%" cy="55%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="15%" stop-color="#d9bfff" />
+      <stop offset="40%" stop-color="#8e4ae8" />
+      <stop offset="70%" stop-color="#4d1b99" />
+      <stop offset="100%" stop-color="#2c1266" />
+    </radialGradient>
+
+    <linearGradient id="phoneScreen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b88cff" />
+      <stop offset="100%" stop-color="#8642eb" />
+    </linearGradient>
+
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <g id="sparkle">
+      <circle cx="0" cy="0" r="2" fill="#ffffff" filter="url(#glow)" />
+      <path d="M 0 -12 Q 1 -2 12 0 Q 1 2 0 12 Q -1 2 -12 0 Q -1 -2 0 -12 Z" fill="#ffffff" opacity="0.9" />
+    </g>
+  </defs>
+
+  <path d="M 150 430 Q 250 410 400 410 Q 550 410 650 430 L 650 450 L 150 450 Z" fill="#1b0a3d" />
+
+  <path d="M 260 410 L 260 180 C 
+  260 80 330 30 400 15 C 470 30 540 80 540 180 L 540 410 Z" fill="#3b1c7a" />
+
+  <path d="M 275 410 L 275 190 C 275 100 340 50 400 35 C 460 50 525 100 525 190 L 525 410 Z" fill="#5e2cb8" />
+
+  <path d="M 290 410 L 290 200 C 290 120 350 70 400 55 C 450 70 510 120 510 200 L 510 410 Z" fill="url(#portalGlow)" />
+
+  <g transform="translate(400, 240)">
+    <ellipse cx="0" cy="0" rx="75" ry="120" fill="#a875ff" opacity="0.3" transform="rotate(25)" filter="url(#glow)"/>
+    <ellipse cx="0" cy="0" rx="55" ry="95" fill="#cfabff" opacity="0.4" transform="rotate(-20)" filter="url(#glow)"/>
+    <ellipse cx="0" cy="0" rx="35" ry="60" fill="#ffffff" opacity="0.5" transform="rotate(40)" filter="url(#glow)"/>
+    <circle cx="0" cy="0" r="20" fill="#ffffff" opacity="0.9" filter="url(#glow)"/>
+  </g>
+
+  <use href="#sparkle" x="325" y="175" transform="scale(0.8)" />
+  <use href="#sparkle" x="470" y="160" transform="scale(0.9)" />
+  <use href="#sparkle" x="380" y="110" transform="scale(0.5)" opacity="0.7"/>
+
+  <rect x="310" y="240" width="180" height="175" rx="15" ry="15" fill="url(#phoneScreen)" stroke="#ffffff" stroke-width="7" />
+
+  <path d="M 365 240 L 365 250 C 365 255 370 258 375 258 L 425 258 C 430 258 435 255 435 250 L 435 240 Z" fill="#ffffff" />
+
+  <path d="M 314 380 Q 400 360 486 380 L 486 410 L 314 410 Z" fill="#2c1266" />
+
+  <path d="M 355 385 L 355 305 L 400 260 L 445 305 L 445 385 L 415 385 L 415 330 L 385 330 L 385 385 Z" fill="#2c1266" />
+
+  <path d="M 170 425 Q 220 405 280 415 Q 340 400 400 400 Q 460 400 520 415 Q 580 405 630 425 L 630 435 L 170 435 Z" fill="#2c1266" />
+  <path d="M 150 432 Q 250 415 400 415 Q 550 415 650 432 L 670 445 L 130 445 Z" fill="#200a4d" />
+
+</svg>
