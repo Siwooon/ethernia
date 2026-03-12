@@ -1,0 +1,128 @@
+import { ClassType, Enemy, MapNode, Player, PlayerSkill, Stats } from "@/app/component/types/game";
+import { getUnlockedSkills } from "@/app/component/data/abilities";
+
+const CORRUPTION_EVERY_TURNS = 2;
+
+export function healPlayer(player: Player, hpGain: number, manaGain: number): Player {
+  return {
+    ...player,
+    stats: {
+      ...player.stats,
+      hp: Math.min(player.stats.maxHp, player.stats.hp + hpGain),
+      mana: Math.min(player.stats.maxMana, player.stats.mana + manaGain),
+    },
+  };
+}
+
+export function buffPlayerStats(
+  player: Player,
+  bonuses: Partial<Pick<Stats, "strength" | "magic" | "defense">>
+): Player {
+  return {
+    ...player,
+    stats: {
+      ...player.stats,
+      strength: player.stats.strength + (bonuses.strength || 0),
+      magic: player.stats.magic + (bonuses.magic || 0),
+      defense: player.stats.defense + (bonuses.defense || 0),
+    },
+  };
+}
+
+export function getXpReward(enemy: Enemy, node: MapNode | undefined) {
+  if (!node) return 25;
+  if (node.type === "boss") return 120;
+  if (node.eventType === "battle") return 60;
+  if (node.type === "step") return 35;
+  return 20;
+}
+
+export function getLevelUpStats(classType: ClassType) {
+  switch (classType) {
+    case "Guerrier":
+      return { hp: 18, mana: 4, strength: 3, magic: 1, defense: 2 };
+    case "Mage":
+      return { hp: 8, mana: 18, strength: 1, magic: 4, defense: 1 };
+    case "Archer":
+      return { hp: 12, mana: 8, strength: 3, magic: 1, defense: 1 };
+    case "Voleur":
+      return { hp: 10, mana: 6, strength: 3, magic: 1, defense: 1 };
+    case "Invocateur":
+      return { hp: 12, mana: 14, strength: 2, magic: 3, defense: 1 };
+    default:
+      return { hp: 10, mana: 5, strength: 2, magic: 1, defense: 1 };
+  }
+}
+
+export function applyXpAndLevelUp(
+  player: Player,
+  xpGained: number,
+  onLevelUp: (payload: {
+    playerName: string;
+    classType: ClassType;
+    level: number;
+    growth: {
+      hp: number;
+      mana: number;
+      strength: number;
+      magic: number;
+      defense: number;
+    };
+    newSkills: PlayerSkill[];
+  }) => void
+): Player {
+  let updatedPlayer: Player = {
+    ...player,
+    xp: player.xp + xpGained,
+  };
+
+  while (updatedPlayer.xp >= updatedPlayer.xpToNextLevel) {
+    const oldLevel = updatedPlayer.level;
+    const skillsBefore = getUnlockedSkills(updatedPlayer.classType, oldLevel);
+
+    updatedPlayer.xp -= updatedPlayer.xpToNextLevel;
+
+    const growth = getLevelUpStats(updatedPlayer.classType);
+    const newMaxHp = updatedPlayer.stats.maxHp + growth.hp;
+    const newMaxMana = updatedPlayer.stats.maxMana + growth.mana;
+
+    updatedPlayer = {
+      ...updatedPlayer,
+      level: updatedPlayer.level + 1,
+      xpToNextLevel: Math.floor(updatedPlayer.xpToNextLevel * 1.25),
+      stats: {
+        ...updatedPlayer.stats,
+        maxHp: newMaxHp,
+        hp: newMaxHp,
+        maxMana: newMaxMana,
+        mana: newMaxMana,
+        strength: updatedPlayer.stats.strength + growth.strength,
+        magic: updatedPlayer.stats.magic + growth.magic,
+        defense: updatedPlayer.stats.defense + growth.defense,
+      },
+    };
+
+    const skillsAfter = getUnlockedSkills(updatedPlayer.classType, updatedPlayer.level);
+    const newSkills = skillsAfter.filter(
+      (afterSkill) => !skillsBefore.some((beforeSkill) => beforeSkill.id === afterSkill.id)
+    );
+
+    onLevelUp({
+      playerName: updatedPlayer.name,
+      classType: updatedPlayer.classType,
+      level: updatedPlayer.level,
+      growth,
+      newSkills,
+    });
+  }
+
+  return updatedPlayer;
+}
+
+export function getNextCorruptionDepth(nextTurn: number) {
+  return Math.floor(nextTurn / CORRUPTION_EVERY_TURNS);
+}
+
+export function isNodeCorrupted(node: MapNode, corruptionDepth: number) {
+  return node.depth <= corruptionDepth;
+}
