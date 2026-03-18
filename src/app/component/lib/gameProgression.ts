@@ -1,7 +1,6 @@
 import { ClassType, Enemy, MapNode, Player, PlayerSkill, Stats } from "@/app/component/types/game";
 import { getUnlockedSkills } from "@/app/component/data/abilities";
-
-const CORRUPTION_EVERY_TURNS = 2;
+import { getEffectiveStats } from "@/app/component/lib/equipment";
 
 export function healPlayer(player: Player, hpGain: number, manaGain: number): Player {
   return {
@@ -29,9 +28,58 @@ export function buffPlayerStats(
   };
 }
 
+
+export function getBossStatuePenaltyTier(statuesCollected: number): 0 | 1 | 2 {
+  if (statuesCollected >= 2) return 2;
+  if (statuesCollected >= 1) return 1;
+  return 0;
+}
+
+export function getBossModifiersFromStatues(statuesCollected: number) {
+  const tier = getBossStatuePenaltyTier(statuesCollected);
+
+  if (tier === 0) {
+    return {
+      hp: 1.7,
+      strength: 1.3,
+      magic: 1.25,
+      defense: 1.2,
+      title: "Boss déchaîné",
+      prefix: "☠️☠️ ",
+      description:
+        "Le gardien conserve presque toute sa puissance. Les sceaux n'ont pas été brisés.",
+    };
+  }
+
+  if (tier === 1) {
+    return {
+      hp: 1.3,
+      strength: 1.12,
+      magic: 1.1,
+      defense: 1.08,
+      title: "Boss instable",
+      prefix: "☠️ ",
+      description:
+        "Une statuette a été récupérée. Le pouvoir du gardien a partiellement diminué.",
+    };
+  }
+
+  return {
+    hp: 1,
+    strength: 1,
+    magic: 1,
+    defense: 1,
+    title: "Boss affaibli",
+    prefix: "",
+    description:
+      "Les statuettes ont brisé les sceaux. Le gardien combat à sa puissance normale.",
+  };
+}
+
 export function getXpReward(enemy: Enemy, node: MapNode | undefined) {
   if (!node) return 25;
   if (node.type === "boss") return 120;
+  if (node.eventType === "elite") return 90;
   if (node.eventType === "battle") return 60;
   if (node.type === "step") return 35;
   return 20;
@@ -119,10 +167,110 @@ export function applyXpAndLevelUp(
   return updatedPlayer;
 }
 
-export function getNextCorruptionDepth(nextTurn: number) {
-  return Math.floor(nextTurn / CORRUPTION_EVERY_TURNS);
+export function healPlayerWithEquipment(player: Player, hpGain: number, manaGain: number): Player {
+  const effective = getEffectiveStats(player);
+  const hpDelta = Math.min(effective.maxHp, effective.hp + hpGain) - effective.hp;
+  const manaDelta = Math.min(effective.maxMana, effective.mana + manaGain) - effective.mana;
+
+  return {
+    ...player,
+    stats: {
+      ...player.stats,
+      hp: Math.min(player.stats.maxHp, player.stats.hp + hpDelta),
+      mana: Math.min(player.stats.maxMana, player.stats.mana + manaDelta),
+    },
+  };
+}
+
+export function getNextCorruptionDepth(
+  nextTurn: number,
+  corruptionEveryTurns: number
+) {
+  return Math.floor(nextTurn / corruptionEveryTurns);
 }
 
 export function isNodeCorrupted(node: MapNode, corruptionDepth: number) {
+  if (corruptionDepth <= 0) return false;
+  if (node.type === "start") return false;
   return node.depth <= corruptionDepth;
+}
+
+export function getCorruptionTier(corruptionDepth: number) {
+  if (corruptionDepth >= 4) return 4;
+  if (corruptionDepth >= 3) return 3;
+  if (corruptionDepth >= 2) return 2;
+  if (corruptionDepth >= 1) return 1;
+  return 0;
+}
+
+export function getCorruptionMapDamage(corruptionDepth: number) {
+  const tier = getCorruptionTier(corruptionDepth);
+
+  if (tier >= 3) return 8;
+  if (tier >= 1) return 5;
+  return 0;
+}
+
+export function getRestHealMultiplier(corruptionDepth: number) {
+  const tier = getCorruptionTier(corruptionDepth);
+
+  if (tier >= 4) return 0.45;
+  if (tier >= 3) return 0.55;
+  if (tier >= 2) return 0.7;
+  return 1;
+}
+
+export function getCorruptedEnemyMultiplier(corruptionDepth: number) {
+  const tier = getCorruptionTier(corruptionDepth);
+
+  if (tier >= 4) {
+    return {
+      hp: 1.6,
+      strength: 1.35,
+      magic: 1.3,
+      defense: 1.2,
+    };
+  }
+
+  if (tier >= 3) {
+    return {
+      hp: 1.45,
+      strength: 1.25,
+      magic: 1.2,
+      defense: 1.15,
+    };
+  }
+
+  if (tier >= 1) {
+    return {
+      hp: 1.3,
+      strength: 1.18,
+      magic: 1.15,
+      defense: 1.1,
+    };
+  }
+
+  return {
+    hp: 1,
+    strength: 1,
+    magic: 1,
+    defense: 1,
+  };
+}
+
+export function getCorruptionTierLabel(corruptionDepth: number) {
+  const tier = getCorruptionTier(corruptionDepth);
+
+  switch (tier) {
+    case 0:
+      return "Faible";
+    case 1:
+      return "Instable";
+    case 2:
+      return "Pesante";
+    case 3:
+      return "Sévère";
+    default:
+      return "Critique";
+  }
 }

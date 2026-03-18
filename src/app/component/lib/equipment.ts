@@ -84,13 +84,23 @@ export function getEquipmentBonuses(player: Player) {
 
   return equippedItems.reduce(
     (acc, item) => {
-      if (!item?.effects) return acc;
+      if (!item) return acc;
 
-      acc.strength += item.effects.strength || 0;
-      acc.magic += item.effects.magic || 0;
-      acc.defense += item.effects.defense || 0;
-      acc.maxHp += item.effects.maxHp || 0;
-      acc.maxMana += item.effects.maxMana || 0;
+      if (item.effects) {
+        acc.strength += item.effects.strength || 0;
+        acc.magic += item.effects.magic || 0;
+        acc.defense += item.effects.defense || 0;
+        acc.maxHp += item.effects.maxHp || 0;
+        acc.maxMana += item.effects.maxMana || 0;
+      }
+
+      if (item.curseEffects) {
+        acc.strength += item.curseEffects.strength || 0;
+        acc.magic += item.curseEffects.magic || 0;
+        acc.defense += item.curseEffects.defense || 0;
+        acc.maxHp += item.curseEffects.maxHp || 0;
+        acc.maxMana += item.curseEffects.maxMana || 0;
+      }
 
       return acc;
     },

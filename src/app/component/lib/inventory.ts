@@ -1,5 +1,6 @@
 import { equipItem, unequipItem } from "@/app/component/lib/equipment";
 import { InventoryItem, Player } from "@/app/component/types/game";
+import { generateId } from "@/app/component/lib/id";
 
 function stackOrInsertItem(inventory: InventoryItem[], item: InventoryItem): InventoryItem[] {
   const existingIndex = inventory.findIndex(
@@ -83,7 +84,7 @@ export function buyItem(player: Player, item: InventoryItem): Player {
     },
     {
       ...item,
-      id: crypto.randomUUID(),
+      id: generateId(),
       quantity: 1,
     }
   );

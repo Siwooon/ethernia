@@ -3,15 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { getUnlockedSkills } from "@/app/component/data/abilities";
-import { Enemy, EnemyAttack, Player, PlayerSkill, Stats } from "@/app/component/types/game";
+import { Enemy, EnemyAttack, Player, PlayerSkill, Stats, StatusEffect } from "@/app/component/types/game";
 import { getEffectiveStats } from "@/app/component/lib/equipment";
+import { addStatus, applyTurnStatusEffectsToStats, getStatusValue, hasStatus } from "@/app/component/lib/statusEffects";
+import { applyCombatStartMapEffects, consumeCombatMapEffects } from "@/app/component/lib/mapEffects";
 
 type Props = {
   player: Player;
   enemy: Enemy;
   onWin: (remainingStats: Stats) => void;
   onDefeat: () => void;
-  onFlee: () => void;
+  onFlee: (remainingStats: Stats) => void;
 };
 
 export default function CombatOverlay({
@@ -22,16 +24,31 @@ export default function CombatOverlay({
   onFlee,
 }: Props) {
   const [logs, setLogs] = useState<string[]>(["⚔️ Le combat commence !"]);
-  const [pStats, setPStats] = useState<Stats>({ ...getEffectiveStats(player) });
+  const basePlayerStats = getEffectiveStats(player);
+  const blessingBonus = player.mapEffects
+    ?.filter((e) => e.type === "blessing")
+    .reduce((sum, e) => sum + e.value, 0) || 0;
+
+  const [pStats, setPStats] = useState<Stats>({
+    ...basePlayerStats,
+    magic: basePlayerStats.magic + blessingBonus,
+  });
   const [eStats, setEStats] = useState<Enemy>({ ...enemy });
   const [turn, setTurn] = useState<"player" | "animating">("player");
   const [defending, setDefending] = useState(false);
   const [shake, setShake] = useState<"player" | "enemy" | null>(null);
   const [selectedSkillId, setSelectedSkillId] = useState<string>("");
+  const [playerStatuses, setPlayerStatuses] = useState<StatusEffect[]>([
+    ...(player.statuses || []),
+    ...applyCombatStartMapEffects(player),
+  ]);
+  const [enemyStatuses, setEnemyStatuses] = useState<StatusEffect[]>(enemy.statuses || []);
 
   const pStatsRef = useRef(pStats);
   const eStatsRef = useRef(eStats);
   const defendingRef = useRef(defending);
+  const playerStatusesRef = useRef(playerStatuses);
+  const enemyStatusesRef = useRef(enemyStatuses);
 
   useEffect(() => {
     pStatsRef.current = pStats;
@@ -44,6 +61,12 @@ export default function CombatOverlay({
   useEffect(() => {
     defendingRef.current = defending;
   }, [defending]);
+  useEffect(() => {
+    playerStatusesRef.current = playerStatuses;
+  }, [playerStatuses]);
+  useEffect(() => {
+    enemyStatusesRef.current = enemyStatuses;
+  }, [enemyStatuses]);
 
   const unlockedSkills = useMemo(
     () => getUnlockedSkills(player.classType, player.level),
@@ -74,7 +97,9 @@ export default function CombatOverlay({
     const variable = 0.9 + Math.random() * 0.25;
     raw = Math.floor(raw * variable);
 
-    const shielded = defendingRef.current ? Math.floor(raw * 0.4) : raw;
+    const shieldStatus = hasStatus(playerStatusesRef.current, "shield");
+    const shieldMultiplier = defendingRef.current ? 0.4 : shieldStatus ? 0.65 : 1;
+    const shielded = Math.floor(raw * shieldMultiplier);
     const reduced = Math.max(1, shielded - Math.floor(playerData.defense / 3));
 
     let final = reduced;
@@ -86,10 +111,39 @@ export default function CombatOverlay({
     return { damage: final, crit };
   };
 
-  const doEnemyTurn = () => {
-    const ps = pStatsRef.current;
-    const es = eStatsRef.current;
+  const statusLabelMap: Record<StatusEffect["type"], string> = {
+    poison: "☠️ Poison",
+    burn: "🔥 Brûlure",
+    shield: "🛡️ Bouclier",
+    regen: "✨ Régénération",
+  };
 
+  const doEnemyTurn = () => {
+    const enemyStatusResult = applyTurnStatusEffectsToStats({
+      hp: eStatsRef.current.hp,
+      maxHp: eStatsRef.current.maxHp,
+      statuses: enemyStatusesRef.current,
+    });
+
+    if (enemyStatusResult.logs.length > 0) {
+      enemyStatusResult.logs.forEach((log) => addLog(`👹 ${eStatsRef.current.name} — ${log}`));
+    }
+
+    setEnemyStatuses(enemyStatusResult.statuses);
+    setEStats((prev) => ({
+      ...prev,
+      hp: enemyStatusResult.hp,
+    }));
+
+    if (enemyStatusResult.hp <= 0) {
+      setTimeout(() => onWin(pStatsRef.current), 600);
+      return;
+    }
+    const ps = pStatsRef.current;
+    const es = {
+      ...eStatsRef.current,
+      hp: enemyStatusResult.hp,
+    };
     const attack =
       es.attacks[Math.floor(Math.random() * es.attacks.length)] || es.attacks[0];
 
@@ -111,6 +165,31 @@ export default function CombatOverlay({
         mana: nextMana,
       };
     });
+    if (attack.statusEffect) {
+      const effect = attack.statusEffect;
+
+      if (effect.target === "player") {
+        setPlayerStatuses((prev) =>
+          addStatus(prev, {
+            type: effect.type,
+            value: effect.value,
+            duration: effect.duration,
+            source: attack.name,
+          })
+        );
+      }
+
+      if (effect.target === "enemy") {
+        setEnemyStatuses((prev) =>
+          addStatus(prev, {
+            type: effect.type,
+            value: effect.value,
+            duration: effect.duration,
+            source: attack.name,
+          })
+        );
+      }
+    }
 
     if (attack.selfHealPercent) {
       setEStats((prev) => {
@@ -126,7 +205,18 @@ export default function CombatOverlay({
 
     const critText = crit ? " 💥 CRITIQUE !" : "";
     const manaText = attack.manaBurn ? ` -${attack.manaBurn} Mana` : "";
-    addLog(`👹 ${es.name} utilise ${attack.name} : -${damage} PV${critText}${manaText}`);
+
+    let statusText = "";
+    if (attack.statusEffect) {
+      if (attack.statusEffect.type === "poison") statusText = " + Poison";
+      if (attack.statusEffect.type === "burn") statusText = " + Brûlure";
+      if (attack.statusEffect.type === "shield") statusText = " + Bouclier";
+      if (attack.statusEffect.type === "regen") statusText = " + Régénération";
+    }
+
+    addLog(
+      `👹 ${es.name} utilise ${attack.name} : -${damage} PV${critText}${manaText}${statusText}`
+    );
 
     if (finalHp <= 0) {
       setTimeout(() => onDefeat(), 800);
@@ -160,9 +250,32 @@ export default function CombatOverlay({
 
   const handleAction = (action: "attack" | "special" | "defend" | "flee") => {
     if (turn !== "player") return;
+    const playerStatusResult = applyTurnStatusEffectsToStats({
+      hp: pStatsRef.current.hp,
+      maxHp: pStatsRef.current.maxHp,
+      statuses: playerStatusesRef.current,
+    });
+
+    if (playerStatusResult.logs.length > 0) {
+      playerStatusResult.logs.forEach((log) => addLog(`🧙 ${player.name} — ${log}`));
+    }
+
+    setPlayerStatuses(playerStatusResult.statuses);
+    setPStats((prev) => ({
+      ...prev,
+      hp: playerStatusResult.hp,
+    }));
+
+    if (playerStatusResult.hp <= 0) {
+      setTimeout(() => onDefeat(), 600);
+      return;
+    }
     setTurn("animating");
 
-    const ps = pStatsRef.current;
+    const ps = {
+      ...pStatsRef.current,
+      hp: playerStatusResult.hp,
+    };
     const es = eStatsRef.current;
 
     if (action === "defend") {
@@ -171,7 +284,10 @@ export default function CombatOverlay({
         ...prev,
         mana: Math.min(prev.maxMana, prev.mana + 5),
       }));
-      addLog("🛡️ Posture défensive ! (-60% dégâts reçus, +5 mana)");
+      addLog("🛡️ Posture défensive ! Bouclier actif, +5 mana");
+      setPlayerStatuses((prev) =>
+        addStatus(prev, { type: "shield", value: 1, duration: 1, source: "defend" })
+      );
       setTimeout(doEnemyTurn, 1000);
       return;
     }
@@ -179,7 +295,7 @@ export default function CombatOverlay({
     if (action === "flee") {
       if (Math.random() < 0.4) {
         addLog("🏃 Vous fuyez le combat !");
-        setTimeout(() => onFlee(), 800);
+        setTimeout(() => onFlee(pStatsRef.current), 800);
       } else {
         addLog("❌ Impossible de fuir !");
         setTimeout(doEnemyTurn, 1000);
@@ -193,7 +309,11 @@ export default function CombatOverlay({
 
     if (action === "attack") {
       const raw = Math.max(1, Math.floor(ps.strength * (0.8 + Math.random() * 0.4)));
-      const reduced = Math.max(1, raw - Math.floor(es.defense / 2));
+      const enemyShieldedRaw = hasStatus(enemyStatusesRef.current, "shield")
+        ? Math.floor(raw * 0.65)
+        : raw;
+
+      const reduced = Math.max(1, enemyShieldedRaw - Math.floor(es.defense / 2));
       const isCrit = Math.random() < 0.1;
       dmg = isCrit ? reduced * 2 : reduced;
 
@@ -219,6 +339,33 @@ export default function CombatOverlay({
 
       const result = computePlayerSkillDamage(selectedSkill, ps, es);
       dmg = result.dmg;
+      if (player.classType === "Mage") {
+        setEnemyStatuses((prev) =>
+          addStatus(prev, { type: "burn", value: 6, duration: 2, source: selectedSkill.name })
+        );
+      }
+
+      if (player.classType === "Voleur") {
+        setEnemyStatuses((prev) =>
+          addStatus(prev, { type: "poison", value: 5, duration: 3, source: selectedSkill.name })
+        );
+      }
+
+      if (player.classType === "Invocateur") {
+        setPlayerStatuses((prev) =>
+          addStatus(prev, { type: "regen", value: 6, duration: 2, source: selectedSkill.name })
+        );
+      }
+
+      if (player.classType === "Guerrier") {
+        setPlayerStatuses((prev) =>
+          addStatus(prev, { type: "shield", value: 1, duration: 1, source: selectedSkill.name })
+        );
+      }
+      if (player.classType === "Mage") logMsg += " + Brûlure";
+      if (player.classType === "Voleur") logMsg += " + Poison";
+      if (player.classType === "Invocateur") logMsg += " + Régénération";
+      if (player.classType === "Guerrier") logMsg += " + Bouclier";
 
       logMsg = `${selectedSkill.icon} ${selectedSkill.name} : -${dmg} PV${
         result.crit ? " 💥 CRITIQUE !" : ""
@@ -298,6 +445,18 @@ export default function CombatOverlay({
               {defending && (
                 <div className="mt-1 text-xs text-cyan-300 font-bold">🛡️ EN DÉFENSE</div>
               )}
+              {playerStatuses.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1 justify-center">
+                  {playerStatuses.map((status, idx) => (
+                    <div
+                      key={`${status.type}-${idx}`}
+                      className="text-[10px] px-2 py-0.5 rounded bg-violet-950 border border-violet-700 text-violet-100"
+                    >
+                      {statusLabelMap[status.type]} ({status.duration})
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </motion.div>
 
@@ -333,6 +492,18 @@ export default function CombatOverlay({
                 </div>
                 <span className="text-xs text-red-400 ml-1">
                   {eStats.hp}/{eStats.maxHp}
+                  {enemyStatuses.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1 justify-center">
+                    {enemyStatuses.map((status, idx) => (
+                      <div
+                        key={`${status.type}-${idx}`}
+                        className="text-[10px] px-2 py-0.5 rounded bg-red-950 border border-red-700 text-red-100"
+                      >
+                        {statusLabelMap[status.type]} ({status.duration})
+                      </div>
+                    ))}
+                  </div>
+                )}
                 </span>
               </div>
             </div>

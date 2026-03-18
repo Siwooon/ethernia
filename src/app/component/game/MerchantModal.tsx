@@ -47,13 +47,25 @@ export default function MerchantModal({
               {stock.map((item) => (
                 <div
                   key={item.id}
-                  className="bg-[#1b0a3d]/80 rounded-lg p-3 border border-violet-900"
+                  className={`rounded-lg p-3 border ${
+                    item.corrupted
+                      ? "bg-red-950/40 border-red-700"
+                      : "bg-[#1b0a3d]/80 border-violet-900"
+                  }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="text-violet-100 font-bold">{item.name}</div>
                     <div className="text-yellow-300 font-bold">{item.buyPrice} or</div>
                   </div>
                   <div className="text-sm text-gray-300 mt-1">{item.description}</div>
+                  {item.corrupted && (
+                    <div className="mt-1">
+                      <div className="text-xs text-red-300 font-bold">
+                        Corrompu
+                      </div>
+
+                    </div>
+                  )}
                   <button
                     onClick={() => onBuy(item)}
                     disabled={player.gold < (item.buyPrice || 0)}
@@ -75,7 +87,11 @@ export default function MerchantModal({
                 player.inventory.map((item) => (
                   <div
                     key={item.id}
-                    className="bg-[#1b0a3d]/80 rounded-lg p-3 border border-violet-900"
+                    className={`rounded-lg p-3 border ${
+                      item.corrupted
+                        ? "bg-red-950/40 border-red-700"
+                        : "bg-[#1b0a3d]/80 border-violet-900"
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="text-violet-100 font-bold">
@@ -84,6 +100,13 @@ export default function MerchantModal({
                       <div className="text-yellow-300 font-bold">{item.sellPrice || 0} or</div>
                     </div>
                     <div className="text-sm text-gray-300 mt-1">{item.description}</div>
+                    {item.corrupted && (
+                      <div className="mt-1">
+                        <div className="text-xs text-red-300 font-bold">
+                          Corrompu
+                        </div>
+                      </div>
+                    )}
                     <button
                       onClick={() => onSell(item.id)}
                       className="mt-3 px-3 py-1 text-sm rounded bg-violet-700 hover:bg-violet-600 border border-violet-400 text-white"

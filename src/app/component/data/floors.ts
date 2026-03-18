@@ -1,32 +1,37 @@
-export type FloorBiome =
-  | "forest"
-  | "ruins"
-  | "crypt";
+export type FloorBiome = "forest" | "ruins" | "swamp" | "crypt" | "mountain" | "cathedral" | "cavern" | "ashlands";
 
-export interface FloorConfig {
+export type FloorDefinition = {
   floor: number;
-  biome: FloorBiome;
+  label: string;
+  biomePool: FloorBiome[];
   corruptionRate: number;
-  bossName: string;
-}
+  scripted?: boolean;
+};
 
-export const FLOORS: FloorConfig[] = [
+export const FLOORS: FloorDefinition[] = [
   {
     floor: 1,
-    biome: "forest",
+    label: "Les terres sauvages",
+    biomePool: ["forest", "ruins", "cavern"],
     corruptionRate: 2,
-    bossName: "Chef bandit",
   },
   {
     floor: 2,
-    biome: "ruins",
-    corruptionRate: 1.6,
-    bossName: "Golem ancien",
+    label: "Les terres perdues",
+    biomePool: ["swamp", "mountain", "cavern"],
+    corruptionRate: 2,
   },
   {
     floor: 3,
-    biome: "crypt",
-    corruptionRate: 1.3,
-    bossName: "Liche",
+    label: "Les vestiges d’Eternia",
+    biomePool: ["cathedral", "ruins", "ashlands"],
+    corruptionRate: 1,
+  },
+  {
+    floor: 4,
+    label: "Le cœur d’Eternia",
+    biomePool: ["cathedral"],
+    corruptionRate: 1,
+    scripted: true,
   },
 ];

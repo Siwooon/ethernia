@@ -11,7 +11,7 @@ export const CLASSES: Record<ClassType, ClassData> = {
       maxHp: 150,
       mana: 20,
       maxMana: 20,
-      strength: 16,
+      strength: 400,
       magic: 2,
       defense: 12,
     },

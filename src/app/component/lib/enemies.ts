@@ -1,4 +1,4 @@
-import { Enemy, EnemyAttack, LocationTheme, MapNode } from "@/app/component/types/game";
+import { Enemy, EnemyAttack, LocationTheme, MapNode, EliteRewardCategory, EnemySourceTag, } from "@/app/component/types/game";
 
 type EnemyTemplate = {
   name: string;
@@ -10,6 +10,8 @@ type EnemyTemplate = {
   archetype: Enemy["archetype"];
   passive?: string;
   specialAttack?: string;
+  rewardCategory?: EliteRewardCategory;
+  sourceTag?: EnemySourceTag;
 };
 
 function getAttacksForArchetype(
@@ -41,7 +43,7 @@ function getAttacksForArchetype(
         {
           id: "stab",
           name: "Entaille Vive",
-          description: "Attaque rapide.",
+          description: "Attaque rapide avec fort taux critique.",
           kind: "physical",
           powerMultiplier: 0.95,
           critChance: 0.2,
@@ -49,10 +51,16 @@ function getAttacksForArchetype(
         {
           id: "ambush",
           name: specialAttack || "Attaque Perfide",
-          description: "Fort potentiel critique.",
+          description: "Peut empoisonner la cible.",
           kind: "physical",
-          powerMultiplier: 1.3,
-          critChance: 0.35,
+          powerMultiplier: 1.1,
+          critChance: 0.25,
+          statusEffect: {
+            type: "poison",
+            value: 5,
+            duration: 3,
+            target: "player",
+          },
         },
       ];
 
@@ -68,10 +76,16 @@ function getAttacksForArchetype(
         {
           id: "burst",
           name: specialAttack || "Explosion occulte",
-          description: "Sort offensif puissant.",
+          description: "Inflige une brûlure magique.",
           kind: "magical",
-          powerMultiplier: 1.5,
+          powerMultiplier: 1.2,
           critChance: 0.12,
+          statusEffect: {
+            type: "burn",
+            value: 6,
+            duration: 2,
+            target: "player",
+          },
         },
       ];
 
@@ -86,10 +100,16 @@ function getAttacksForArchetype(
         },
         {
           id: "quake",
-          name: specialAttack || "Ébranlement",
-          description: "Frappe lente mais lourde.",
+          name: specialAttack || "Carapace runique",
+          description: "Frappe tout en renforçant sa défense.",
           kind: "physical",
-          powerMultiplier: 1.25,
+          powerMultiplier: 0.8,
+          statusEffect: {
+            type: "shield",
+            value: 1,
+            duration: 1,
+            target: "enemy",
+          },
         },
       ];
 
@@ -106,11 +126,17 @@ function getAttacksForArchetype(
         {
           id: "devour",
           name: specialAttack || "Dévoration",
-          description: "Vole un peu d’énergie.",
+          description: "Vole un peu d’énergie et se régénère.",
           kind: "hybrid",
           powerMultiplier: 1.2,
           manaBurn: 8,
           selfHealPercent: 0.2,
+          statusEffect: {
+            type: "regen",
+            value: 5,
+            duration: 2,
+            target: "enemy",
+          },
         },
       ];
 
@@ -453,52 +479,233 @@ const ENEMIES_BY_THEME: Record<LocationTheme, EnemyTemplate[]> = {
   ],
 };
 
-const BOSS_POOL: EnemyTemplate[] = [
-  {
-    name: "Seigneur démon",
-    hp: 300,
-    strength: 24,
-    magic: 14,
-    defense: 10,
-    image: "https://images.unsplash.com/photo-1605806616949-1e87b487bc2a?q=80&w=400",
-    archetype: "brute",
-    passive: "Pression infernale",
-    specialAttack: "Frappe abyssale",
+const BOSS_POOL_BY_THEME: Record<LocationTheme, EnemyTemplate[]> = {
+  forest: [
+    {
+      name: "Chef bandit",
+      hp: 280,
+      strength: 22,
+      magic: 6,
+      defense: 8,
+      image: "https://images.unsplash.com/photo-1511497584788-876760111969?q=80&w=400",
+      archetype: "assassin",
+      passive: "Commande les prédateurs",
+      specialAttack: "Assaut du chef",
+    },
+    {
+      name: "Alpha des bois",
+      hp: 300,
+      strength: 24,
+      magic: 4,
+      defense: 9,
+      image: "https://images.unsplash.com/photo-1588691880436-b52db92040c5?q=80&w=400",
+      archetype: "brute",
+      passive: "Furie bestiale",
+      specialAttack: "Hurlement sauvage",
+    },
+  ],
+
+  ruins: [
+    {
+      name: "Golem ancien",
+      hp: 340,
+      strength: 23,
+      magic: 4,
+      defense: 14,
+      image: "https://images.unsplash.com/photo-1549487928-56df82570ce2?q=80&w=400",
+      archetype: "tank",
+      passive: "Corps de pierre",
+      specialAttack: "Poing titanesque",
+    },
+    {
+      name: "Gardien des vestiges",
+      hp: 320,
+      strength: 21,
+      magic: 10,
+      defense: 12,
+      image: "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?q=80&w=400",
+      archetype: "tank",
+      passive: "Veille millénaire",
+      specialAttack: "Jugement des ruines",
+    },
+  ],
+
+  crypt: [
+    {
+      name: "Liche",
+      hp: 280,
+      strength: 10,
+      magic: 26,
+      defense: 8,
+      image: "https://images.unsplash.com/photo-1605806616949-1e87b487bc2a?q=80&w=400",
+      archetype: "mage",
+      passive: "Nécromancie noire",
+      specialAttack: "Orbe mortel",
+    },
+    {
+      name: "Seigneur spectral",
+      hp: 300,
+      strength: 14,
+      magic: 22,
+      defense: 9,
+      image: "https://images.unsplash.com/photo-1520637836862-4d197d17c90a?q=80&w=400",
+      archetype: "mage",
+      passive: "Voile funèbre",
+      specialAttack: "Tempête d'âmes",
+    },
+  ],
+
+  swamp: [],
+  mountain: [],
+  village: [],
+  cathedral: [],
+  cavern: [],
+  ashlands: [],
+};
+
+const SPECIAL_ENEMIES_BY_TAG: Record<EnemySourceTag, Partial<Record<LocationTheme, EnemyTemplate[]>>> = {
+  normal: {},
+  elite: {
+    forest: [
+      {
+        name: "Traqueur alpha",
+        hp: 88,
+        strength: 15,
+        magic: 2,
+        defense: 7,
+        image: "https://images.unsplash.com/photo-1588691880436-b52db92040c5?q=80&w=400",
+        archetype: "assassin",
+        passive: "Prédateur d’élite",
+        specialAttack: "Rafale de crocs",
+        rewardCategory: "weapon",
+        sourceTag: "elite",
+      },
+      {
+        name: "Gardebois ancien",
+        hp: 96,
+        strength: 12,
+        magic: 8,
+        defense: 8,
+        image: "https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=400",
+        archetype: "tank",
+        passive: "Protège les reliques",
+        specialAttack: "Entrave sylvestre",
+        rewardCategory: "relic",
+        sourceTag: "elite",
+      },
+    ],
+    ruins: [
+      {
+        name: "Champion des vestiges",
+        hp: 104,
+        strength: 14,
+        magic: 6,
+        defense: 11,
+        image: "https://images.unsplash.com/photo-1549487928-56df82570ce2?q=80&w=400",
+        archetype: "tank",
+        passive: "Armure antique",
+        specialAttack: "Marteau runique",
+        rewardCategory: "armor",
+        sourceTag: "elite",
+      },
+      {
+        name: "Exécuteur brisé",
+        hp: 92,
+        strength: 17,
+        magic: 2,
+        defense: 7,
+        image: "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?q=80&w=400",
+        archetype: "brute",
+        passive: "Frappe dévastatrice",
+        specialAttack: "Fracassement",
+        rewardCategory: "weapon",
+        sourceTag: "elite",
+      },
+    ],
+    crypt: [
+      {
+        name: "Prêtre sépulcral",
+        hp: 84,
+        strength: 7,
+        magic: 18,
+        defense: 6,
+        image: "https://images.unsplash.com/photo-1520637836862-4d197d17c90a?q=80&w=400",
+        archetype: "mage",
+        passive: "Magie funéraire",
+        specialAttack: "Nova sépulcrale",
+        rewardCategory: "relic",
+        sourceTag: "elite",
+      },
+      {
+        name: "Chevalier du tombeau",
+        hp: 108,
+        strength: 15,
+        magic: 4,
+        defense: 10,
+        image: "https://images.unsplash.com/photo-1519074069444-1ba4fff66d16?q=80&w=400",
+        archetype: "tank",
+        passive: "Garde les sceaux",
+        specialAttack: "Jugement du caveau",
+        rewardCategory: "armor",
+        sourceTag: "elite",
+      },
+    ],
   },
-  {
-    name: "Dragon de l'abysse",
-    hp: 320,
-    strength: 22,
-    magic: 18,
-    defense: 9,
-    image: "https://images.unsplash.com/photo-1605806616949-1e87b487bc2a?q=80&w=400",
-    archetype: "mage",
-    passive: "Souffle ancien",
-    specialAttack: "Flamme abyssale",
+
+  statue_guardian: {
+    forest: [
+      {
+        name: "Gardien de racines",
+        hp: 90,
+        strength: 13,
+        magic: 7,
+        defense: 8,
+        image: "https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=400",
+        archetype: "tank",
+        passive: "Veilleur de relique",
+        specialAttack: "Chaînes végétales",
+        rewardCategory: "relic",
+        sourceTag: "statue_guardian",
+      },
+    ],
+    ruins: [
+      {
+        name: "Sentinelle runique",
+        hp: 102,
+        strength: 14,
+        magic: 6,
+        defense: 10,
+        image: "https://images.unsplash.com/photo-1549487928-56df82570ce2?q=80&w=400",
+        archetype: "tank",
+        passive: "Défense sacrée",
+        specialAttack: "Onde runique",
+        rewardCategory: "relic",
+        sourceTag: "statue_guardian",
+      },
+    ],
+    crypt: [
+      {
+        name: "Veilleur des tombes",
+        hp: 88,
+        strength: 10,
+        magic: 15,
+        defense: 7,
+        image: "https://images.unsplash.com/photo-1520637836862-4d197d17c90a?q=80&w=400",
+        archetype: "mage",
+        passive: "Lie les âmes",
+        specialAttack: "Chaîne d’ossements",
+        rewardCategory: "relic",
+        sourceTag: "statue_guardian",
+      },
+    ],
   },
-  {
-    name: "Liche éternelle",
-    hp: 270,
-    strength: 12,
-    magic: 24,
-    defense: 8,
-    image: "https://images.unsplash.com/photo-1605806616949-1e87b487bc2a?q=80&w=400",
-    archetype: "mage",
-    passive: "Nécromancie",
-    specialAttack: "Orbe mortel",
-  },
-  {
-    name: "Titan maudit",
-    hp: 360,
-    strength: 26,
-    magic: 6,
-    defense: 14,
-    image: "https://images.unsplash.com/photo-1605806616949-1e87b487bc2a?q=80&w=400",
-    archetype: "tank",
-    passive: "Armure colossale",
-    specialAttack: "Écrasement divin",
-  },
-];
+
+  merchant_blacksmith_corrupted: {},
+  merchant_alchemist_corrupted: {},
+  merchant_mystic_corrupted: {},
+  treasure_mimic: {},
+  random_ambush: {},
+};
 
 function randomItem<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)];
@@ -517,12 +724,44 @@ function buildEnemyFromTemplate(template: EnemyTemplate): Enemy {
     passive: template.passive,
     specialAttack: template.specialAttack,
     attacks: getAttacksForArchetype(template.archetype, template.specialAttack),
+    statuses: [],
+    rewardCategory: template.rewardCategory,
+    sourceTag: template.sourceTag ?? "normal",
+  };
+}
+
+export function createSpecialEnemy(
+  node: MapNode,
+  sourceTag: EnemySourceTag,
+  fallbackRewardCategory?: EliteRewardCategory
+): Enemy {
+  const specialPool = SPECIAL_ENEMIES_BY_TAG[sourceTag]?.[node.locationTheme];
+
+  if (specialPool && specialPool.length > 0) {
+    const picked = buildEnemyFromTemplate(randomItem(specialPool));
+
+    return {
+      ...picked,
+      rewardCategory: picked.rewardCategory ?? fallbackRewardCategory,
+      sourceTag,
+    };
+  }
+
+  const base = createEnemyFromNode({ ...node, eventType: "battle" });
+
+  return {
+    ...base,
+    rewardCategory: fallbackRewardCategory,
+    sourceTag,
   };
 }
 
 export function createEnemyFromNode(node: MapNode): Enemy {
   if (node.eventType === "boss" || node.type === "boss") {
-    return buildEnemyFromTemplate(randomItem(BOSS_POOL));
+    const bossPool = BOSS_POOL_BY_THEME[node.locationTheme];
+    if (bossPool && bossPool.length > 0) {
+      return buildEnemyFromTemplate(randomItem(bossPool));
+    }
   }
 
   const pool = ENEMIES_BY_THEME[node.locationTheme];

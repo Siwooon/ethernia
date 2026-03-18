@@ -2,19 +2,36 @@
 
 import { Player } from "@/app/component/types/game";
 import { getEffectiveStats } from "@/app/component/lib/equipment";
+import { FloorBiome } from "@/app/component/data/floors";
 
 type Props = {
   currentPlayer: Player | undefined;
+  currentFloor: number;
+  floorBiome: FloorBiome;
+  currentFloorStatues: number;
+  requiredStatues: number;
 };
 
-export default function GameHUD({ currentPlayer }: Props) {
+export default function GameHUD({ currentPlayer, currentFloor, floorBiome, currentFloorStatues, requiredStatues }: Props) {
   const effectiveStats = currentPlayer ? getEffectiveStats(currentPlayer) : null;
   return (
     <div className="h-20 bg-[#0f0518] z-20 flex items-center justify-between px-8 border-b-2 border-[#2c1266] shadow-lg">
       <div className="text-3xl font-fantasy text-violet-400 tracking-widest">
         ETHERNIA
       </div>
-
+      <div className="text-sm text-violet-300 font-rpg">
+        Étage {currentFloor} • {floorBiome === "forest" ? "Forêt" : floorBiome === "ruins" ? "Ruines" : "Crypte"}
+      </div>
+      <div className="text-sm text-amber-200">
+        Statuettes : {currentFloorStatues}/{requiredStatues}
+      </div>
+      <div className="text-xs text-amber-300/80">
+        {currentFloorStatues >= 2
+          ? "Le boss a été affaibli."
+          : currentFloorStatues === 1
+          ? "Le boss a été partiellement affaibli."
+          : "Le boss conserve toute sa puissance."}
+      </div>
       <div className="flex flex-col items-end min-w-[320px]">
         <div className="text-sm text-gray-400 font-rpg">Tour de</div>
         <div className="text-2xl font-bold text-violet-100 flex items-center gap-2 font-fantasy">

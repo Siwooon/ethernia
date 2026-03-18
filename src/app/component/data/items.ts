@@ -1,8 +1,9 @@
-import { InventoryItem } from "@/app/component/types/game";
+import { EliteRewardCategory, InventoryItem } from "@/app/component/types/game";
+import { generateId } from "@/app/component/lib/id";
 
 export const BASE_ITEMS = {
   potion_small: (): InventoryItem => ({
-    id: crypto.randomUUID(),
+    id: generateId(),
     name: "Petite potion",
     description: "Rend 25 PV.",
     type: "consumable",
@@ -13,7 +14,7 @@ export const BASE_ITEMS = {
   }),
 
   ether_small: (): InventoryItem => ({
-    id: crypto.randomUUID(),
+    id: generateId(),
     name: "Petit éther",
     description: "Rend 20 Mana.",
     type: "consumable",
@@ -24,7 +25,7 @@ export const BASE_ITEMS = {
   }),
 
   iron_shard: (): InventoryItem => ({
-    id: crypto.randomUUID(),
+    id: generateId(),
     name: "Éclat de fer",
     description: "Matériau utilisable chez certains marchands.",
     type: "material",
@@ -34,7 +35,7 @@ export const BASE_ITEMS = {
   }),
 
   relic_guard: (): InventoryItem => ({
-    id: crypto.randomUUID(),
+    id: generateId(),
     name: "Relique du gardien",
     description: "Confère une protection ancienne.",
     type: "relic",
@@ -47,9 +48,9 @@ export const BASE_ITEMS = {
 
 export const EQUIPMENT_ITEMS = {
   iron_sword: (): InventoryItem => ({
-    id: crypto.randomUUID(),
+    id: generateId(),
     name: "Épée de fer",
-    description: "Arme simple. Force +2.",
+    description: "Force +2.",
     type: "equipment",
     quantity: 1,
     slot: "weapon",
@@ -59,9 +60,9 @@ export const EQUIPMENT_ITEMS = {
   }),
 
   mystic_staff: (): InventoryItem => ({
-    id: crypto.randomUUID(),
+    id: generateId(),
     name: "Bâton mystique",
-    description: "Catalyseur ancien. Magie +2.",
+    description: "Magie +2.",
     type: "equipment",
     quantity: 1,
     slot: "weapon",
@@ -71,9 +72,9 @@ export const EQUIPMENT_ITEMS = {
   }),
 
   leather_armor: (): InventoryItem => ({
-    id: crypto.randomUUID(),
+    id: generateId(),
     name: "Armure de cuir",
-    description: "Protection légère. Défense +2, Vie max +5.",
+    description: "Défense +2 Vie max +5.",
     type: "equipment",
     quantity: 1,
     slot: "armor",
@@ -83,9 +84,9 @@ export const EQUIPMENT_ITEMS = {
   }),
 
   guardian_relic: (): InventoryItem => ({
-    id: crypto.randomUUID(),
+    id: generateId(),
     name: "Relique du gardien",
-    description: "Relique protectrice. Défense +1, Mana max +5.",
+    description: "Défense +1 Mana max +5.",
     type: "equipment",
     quantity: 1,
     slot: "relic",
@@ -94,3 +95,104 @@ export const EQUIPMENT_ITEMS = {
     effects: { defense: 1, maxMana: 5 },
   }),
 };
+
+export const CORRUPTED_EQUIPMENT_ITEMS = {
+  cursed_blade: (): InventoryItem => ({
+    id: generateId(),
+    name: "Lame du sacrifice",
+    description: "Force +5, PV max -15.",
+    type: "equipment",
+    quantity: 1,
+    slot: "weapon",
+    corrupted: true,
+    buyPrice: 95,
+    sellPrice: 40,
+    effects: { strength: 5 },
+    curseEffects: { maxHp: -15 },
+  }),
+
+  void_staff: (): InventoryItem => ({
+    id: generateId(),
+    name: "Bâton du vide",
+    description: "Magie +6 Mana max -10.",
+    type: "equipment",
+    quantity: 1,
+    slot: "weapon",
+    corrupted: true,
+    buyPrice: 100,
+    sellPrice: 45,
+    effects: { magic: 6 },
+    curseEffects: { maxMana: -10 },
+  }),
+
+  rotten_plate: (): InventoryItem => ({
+    id: generateId(),
+    name: "Armure rongée",
+    description: "Défense +4 Force -2.",
+    type: "equipment",
+    quantity: 1,
+    slot: "armor",
+    corrupted: true,
+    buyPrice: 90,
+    sellPrice: 38,
+    effects: { defense: 4 },
+    curseEffects: { strength: -2 },
+  }),
+
+  abyss_relic: (): InventoryItem => ({
+    id: generateId(),
+    name: "Relique du gouffre",
+    description: "Mana max +20 PV max -10.",
+    type: "equipment",
+    quantity: 1,
+    slot: "relic",
+    corrupted: true,
+    buyPrice: 110,
+    sellPrice: 50,
+    effects: { maxMana: 20 },
+    curseEffects: { maxHp: -10 },
+  }),
+};
+
+export function getEliteRewardByCategory(category: EliteRewardCategory): InventoryItem | null {
+  switch (category) {
+    case "weapon": {
+      const pool = [
+        EQUIPMENT_ITEMS.iron_sword(),
+        EQUIPMENT_ITEMS.mystic_staff(),
+      ];
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    case "armor": {
+      const pool = [
+        EQUIPMENT_ITEMS.leather_armor(),
+      ];
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    case "relic": {
+      const pool = [
+        EQUIPMENT_ITEMS.guardian_relic(),
+        BASE_ITEMS.relic_guard(),
+      ];
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    case "consumable": {
+      const pool = [
+        BASE_ITEMS.potion_small(),
+        BASE_ITEMS.ether_small(),
+      ];
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    case "material": {
+      return BASE_ITEMS.iron_shard();
+    }
+
+    case "gold":
+    default:
+      return null;
+  }
+}
