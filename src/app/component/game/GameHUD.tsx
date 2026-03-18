@@ -1,7 +1,7 @@
 "use client";
 
 import { Player } from "@/app/component/types/game";
-import { getEffectiveStats } from "@/app/component/lib/equipment";
+import { getDerivedPlayerStats } from "@/app/component/lib/playerStats";
 import { FloorBiome } from "@/app/component/data/floors";
 
 type Props = {
@@ -13,7 +13,7 @@ type Props = {
 };
 
 export default function GameHUD({ currentPlayer, currentFloor, floorBiome, currentFloorStatues, requiredStatues }: Props) {
-  const effectiveStats = currentPlayer ? getEffectiveStats(currentPlayer) : null;
+  const effectiveStats = currentPlayer ? getDerivedPlayerStats(currentPlayer) : null;
   return (
     <div className="h-20 bg-[#0f0518] z-20 flex items-center justify-between px-8 border-b-2 border-[#2c1266] shadow-lg">
       <div className="text-3xl font-fantasy text-violet-400 tracking-widest">

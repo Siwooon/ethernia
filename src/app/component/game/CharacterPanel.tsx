@@ -1,11 +1,11 @@
 "use client";
 
-import { getEffectiveStats, getEquipmentBonuses } from "@/app/component/lib/equipment";
+import { getEquipmentBonuses } from "@/app/component/lib/equipment";
+import { getDerivedPlayerStats } from "@/app/component/lib/playerStats";
 import { InventoryItem, Player } from "@/app/component/types/game";
 import { AnimatePresence, motion } from "framer-motion";
-import { applyMapEffectsToPlayerStats } from "@/app/component/lib/mapEffects";
 
-type PanelTab = "stats" | "inventory" | "equipment";
+type PanelTab = "stats" | "inventory" | "equipment" | "passives";
 
 type Props = {
   player: Player | undefined;
@@ -43,6 +43,32 @@ export default function CharacterPanel({
     if (effects.maxHp) lines.push(`PV max ${effects.maxHp > 0 ? "+" : ""}${effects.maxHp}`);
     if (effects.maxMana) lines.push(`Mana max ${effects.maxMana > 0 ? "+" : ""}${effects.maxMana}`);
     return lines;
+  };
+    const formatPassiveTrigger = (trigger: Player["passives"][number]["trigger"]) => {
+    switch (trigger) {
+      case "combat_start":
+        return "Début de combat";
+      case "combat_end":
+        return "Fin de combat";
+      case "turn_start":
+        return "Début de tour";
+      case "turn_end":
+        return "Fin de tour";
+      case "before_attack":
+        return "Avant attaque";
+      case "after_attack":
+        return "Après attaque";
+      case "before_take_damage":
+        return "Avant dégâts reçus";
+      case "after_take_damage":
+        return "Après dégâts reçus";
+      case "map_enter_node":
+        return "Entrée sur une case";
+      case "map_end_turn":
+        return "Fin de tour carte";
+      default:
+        return trigger;
+    }
   };
 
   const renderEquippedItemCard = (
@@ -105,14 +131,71 @@ export default function CharacterPanel({
       </div>
     );
   };
-  const equipmentAdjustedStats = getEffectiveStats(player);
-  const effectiveStats = {
-    ...equipmentAdjustedStats,
-    ...applyMapEffectsToPlayerStats({
-      ...player,
-      stats: equipmentAdjustedStats,
-    }),
-  };  
+
+  const renderPassivesPanel = () => {
+    return (
+      <div className="mt-3 bg-[#1b0a3d]/80 rounded p-3 border border-amber-700/60">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-bold text-amber-200">Passifs</div>
+          <div className="text-[11px] text-amber-400">
+            {player.passives?.length || 0}
+          </div>
+        </div>
+
+        {!player.passives || player.passives.length === 0 ? (
+          <div className="text-xs text-gray-400 italic">
+            Aucun passif pour le moment.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {player.passives.map((passive) => (
+              <div
+                key={passive.id}
+                className="rounded border border-amber-800 bg-amber-950/20 px-3 py-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-sm font-bold text-amber-100">
+                    ✨ {passive.name}
+                  </div>
+
+                  <div className="text-[10px] uppercase text-amber-400 text-right">
+                    {formatPassiveTrigger(passive.trigger)}
+                  </div>
+                </div>
+
+                <div className="text-xs text-amber-50/90 mt-1">
+                  {passive.description}
+                </div>
+
+                {(passive.value !== undefined || passive.oncePerCombat || passive.chance !== undefined) && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {passive.value !== undefined && (
+                      <div className="text-[10px] px-2 py-1 rounded bg-black/30 border border-amber-900 text-amber-300">
+                        Valeur : {passive.value}
+                      </div>
+                    )}
+
+                    {passive.oncePerCombat && (
+                      <div className="text-[10px] px-2 py-1 rounded bg-black/30 border border-amber-900 text-amber-300">
+                        1 fois / combat
+                      </div>
+                    )}
+
+                    {passive.chance !== undefined && (
+                      <div className="text-[10px] px-2 py-1 rounded bg-black/30 border border-amber-900 text-amber-300">
+                        Chance : {Math.round(passive.chance * 100)}%
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+  const effectiveStats = getDerivedPlayerStats(player);
   const equipmentBonuses = getEquipmentBonuses(player);
 
   const xpPercent = (player.xp / player.xpToNextLevel) * 100;
@@ -229,6 +312,10 @@ export default function CharacterPanel({
                   <span className="text-gray-300">Défense</span>
                   <div className="text-violet-100 font-bold">{effectiveStats.defense}</div>
                 </div>
+                <div className="bg-[#1b0a3d]/80 rounded p-2 border border-violet-900">
+                  <span className="text-gray-300">Vitesse</span>
+                  <div className="text-violet-100 font-bold">{effectiveStats.speed}</div>
+                </div>
               </div>
               {player.mapEffects.length > 0 && (
                 <div className="mt-3 bg-[#1b0a3d]/80 rounded p-3 border border-violet-900">
@@ -248,6 +335,9 @@ export default function CharacterPanel({
                         {effect.type === "infection" && `☣️ Infection`}
                         {effect.type === "blessing" && `✨ Bénédiction (${effect.duration})`}
                         {effect.type === "protection" && `🛡️ Protection (${effect.duration})`}
+                        {effect.type === "fatigue" && `😵 Fatigue (${effect.duration})`}
+                        {effect.type === "hex" && `🔮 Malédiction (${effect.duration})`}
+                        {effect.type === "corruption_mark" && `☠️ Marque corruptrice (${effect.duration})`}
                       </div>
                     ))}
                   </div>
@@ -263,6 +353,8 @@ export default function CharacterPanel({
                   <div>Mana max : <span className="text-blue-400 font-bold">+{equipmentBonuses.maxMana}</span></div>
                 </div>
               </div>
+
+              {renderPassivesPanel()}
             </>
           )}
 
@@ -351,7 +443,9 @@ export default function CharacterPanel({
                 )}
               </div>
             </>
+            
           )}
+          
         </motion.div>
       )}
     </AnimatePresence>

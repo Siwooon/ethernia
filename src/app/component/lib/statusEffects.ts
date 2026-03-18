@@ -40,6 +40,33 @@ export function hasStatus(statuses: StatusEffect[], type: StatusEffect["type"]) 
   return statuses.some((s) => s.type === type);
 }
 
+export function applyStatusModifiersToStats<
+  T extends {
+    strength?: number;
+    magic?: number;
+    defense?: number;
+    statuses: StatusEffect[];
+  }
+>(target: T): T {
+  let next = { ...target };
+
+  for (const status of target.statuses) {
+    if (status.type === "weakness" && typeof next.strength === "number") {
+      next.strength = Math.max(0, next.strength - status.value);
+    }
+
+    if (status.type === "silence" && typeof next.magic === "number") {
+      next.magic = Math.max(0, next.magic - status.value);
+    }
+
+    if (status.type === "frailty" && typeof next.defense === "number") {
+      next.defense = Math.max(0, next.defense - status.value);
+    }
+  }
+
+  return next;
+}
+
 export function applyTurnStatusEffectsToStats<
   T extends { hp: number; maxHp: number; statuses: StatusEffect[] }
 >(target: T) {
@@ -71,4 +98,5 @@ export function applyTurnStatusEffectsToStats<
     logs,
     statuses: tickStatuses(target.statuses),
   };
+  
 }

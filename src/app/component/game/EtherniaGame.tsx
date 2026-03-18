@@ -3,24 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import GlobalStyles from "./GlobalStyles";
-import CombatOverlay from "./CombatOverlay";
 import CharacterPanel from "./CharacterPanel";
 import LevelUpModal from "./LevelUpModal";
 import EventModal from "./EventModal";
 import LobbyScreen from "./LobbyScreen";
 import GameHUD from "./GameHUD";
 import GameMap from "./GameMap";
-import { getEquipmentBonuses } from "@/app/component/lib/equipment";
-import { equipInventoryItem,unequipInventorySlot, consumeItem, addItemToInventory } from "@/app/component/lib/inventory";
+import { equipInventoryItem,unequipInventorySlot, consumeItem, addItemToInventory, buyItem, sellItem  } from "@/app/component/lib/inventory";
 import { FLOORS, FloorBiome } from "@/app/component/data/floors";
+import { PLAYER_PASSIVES } from "@/app/component/lib/passives";
 
 import MerchantModal from "./MerchantModal";
 import { getMerchantStock, MerchantType } from "@/app/component/data/merchantStocks";
-
-import { TRAITS } from "@/app/component/data/traits";
-import { applyTraitModifiers, addTraitToPlayer } from "@/app/component/lib/traits";
-import { buyItem, sellItem } from "@/app/component/lib/inventory";
-import { addMapEffect, applyEndTurnMapEffects, applyMapEffectsToPlayerStats, consumeCombatMapEffects } from "@/app/component/lib/mapEffects";
+import {
+  restorePersistentPlayerStatsFromCombat,
+} from "@/app/component/lib/playerStats";
+import { addMapEffect, applyEndTurnMapEffects, consumeCombatMapEffects } from "@/app/component/lib/mapEffects";
 import { CLASSES } from "@/app/component/data/classes";
 import { generateGridMap } from "@/app/component/lib/generateGridMap";
 import { resolveNodeEvent } from "@/app/component/lib/eventSystem";
@@ -34,8 +32,9 @@ import {
   getXpReward,
 } from "@/app/component/lib/gameProgression";
 
-import { ClassType, Enemy, MapNode, Player, Stats } from "@/app/component/types/game";
-import { getEliteRewardByCategory } from "../data/items";
+import { ClassType, Enemy, MapNode, Player, Stats, StatusEffect } from "@/app/component/types/game";
+import CombatOverlay, { CombatResultPlayer } from "@/app/component/game/CombatOverlay";
+import { getEliteRewardByCategory } from "@/app/component/data/items";
 
 type PendingChoiceContext =
   | { type: "statuette"; corrupted?: boolean }
@@ -54,12 +53,17 @@ export default function EtherniaGame() {
   const [gameOver, setGameOver] = useState(false);
   const [nodes, setNodes] = useState<MapNode[]>([]);
   const [mapWidth, setMapWidth] = useState(3600);
-  const [activeSidePanel, setActiveSidePanel] = useState<"stats" | "inventory" | "equipment" | null>(null);
+  const [activeSidePanel, setActiveSidePanel] = useState<"stats" | "inventory" | "equipment" | "passives" | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [currentFloor, setCurrentFloor] = useState(1);  
   const [victory, setVictory] = useState(false);
   const [pendingChoiceContext, setPendingChoiceContext] = useState<PendingChoiceContext | null>(null);
   const [currentFloorBiome, setCurrentFloorBiome] = useState<FloorBiome>("forest");
+  const [pendingNodeInteraction, setPendingNodeInteraction] = useState<{
+    nodeId: number;
+    playerIndex: number;
+  } | null>(null);
+  const [combatParticipants, setCombatParticipants] = useState<number[]>([]);
 
   const [mapHeight, setMapHeight] = useState(1200);
 
@@ -98,8 +102,8 @@ export default function EtherniaGame() {
   };
   
   const floorData = FLOORS.find((f) => f.floor === currentFloor);
-  const FLOOR_CORRUPTION_START_DELAY = 3;
-  const FLOOR_CORRUPTION_INTERVAL = 2;
+  const FLOOR_CORRUPTION_START_DELAY = 12;
+  const FLOOR_CORRUPTION_INTERVAL = 6;
 
   const CORRUPTION_CHARGE_MAX = 100;
 
@@ -109,34 +113,37 @@ export default function EtherniaGame() {
     return "Boss déchaîné";
   };
 
-const applyPlayerResult = (playerResult: Player) => {
-  setPlayers((prevPlayers) =>
-    prevPlayers.map((p, idx) => {
-      if (idx !== currentPlayerIndex) return p;
+  const requiresNodeInteractionChoice = (node: MapNode) => {
+    return (
+      node.eventType === "battle" ||
+      node.eventType === "elite" ||
+      node.type === "boss"
+    );
+  };
 
-      const finalStats = applyTraitModifiers(
-        playerResult.stats,
-        playerResult.traits ?? []
-      );
+  const applyPlayerResult = (playerResult: Player) => {
+    setPlayers((prevPlayers) =>
+      prevPlayers.map((p, idx) => {
+        if (idx !== currentPlayerIndex) return p;
 
-      return {
-        ...p,
-        stats: finalStats,
-        level: playerResult.level,
-        xp: playerResult.xp,
-        xpToNextLevel: playerResult.xpToNextLevel,
-        isDead: playerResult.isDead,
-        inventory: playerResult.inventory,
-        equipment: playerResult.equipment,
-        gold: playerResult.gold,
-        statuses: playerResult.statuses,
-        mapEffects: playerResult.mapEffects,
-        traits: playerResult.traits ?? [],
-        currentNode: p.currentNode,
-      };
-    })
-  );
-};
+        return {
+          ...p,
+          stats: playerResult.stats,
+          level: playerResult.level,
+          xp: playerResult.xp,
+          xpToNextLevel: playerResult.xpToNextLevel,
+          isDead: playerResult.isDead,
+          inventory: playerResult.inventory,
+          equipment: playerResult.equipment,
+          gold: playerResult.gold,
+          statuses: playerResult.statuses,
+          mapEffects: playerResult.mapEffects,
+          traits: playerResult.traits ?? [],
+          currentNode: p.currentNode,
+        };
+      })
+    );
+  };
 
     const shouldExpandFloorCorruption = (turn: number) => {
       if (turn < FLOOR_CORRUPTION_START_DELAY) return false;
@@ -204,14 +211,18 @@ const applyPlayerResult = (playerResult: Player) => {
       strength: number;
       magic: number;
       defense: number;
+      speed: number;
     };
     newSkills: import("@/app/component/types/game").PlayerSkill[];
   } | null>(null);
 
   const mapRef = useRef<HTMLDivElement>(null);
   const currentPlayer = players[currentPlayerIndex];
+  const combatPlayers = combatParticipants
+    .map((idx) => players[idx])
+    .filter((p): p is Player => Boolean(p));
 
-  const toggleSidePanel = (panel: "stats" | "inventory" | "equipment") => {
+  const toggleSidePanel = (panel: "stats" | "inventory" | "equipment" | "passives") => {
     setActiveSidePanel((prev) => (prev === panel ? null : panel));
   };
 
@@ -298,6 +309,7 @@ const applyPlayerResult = (playerResult: Player) => {
       strength: number;
       magic: number;
       defense: number;
+      speed: number;
     };
     newSkills: import("@/app/component/types/game").PlayerSkill[];
   }) => {
@@ -421,6 +433,7 @@ const applyPlayerResult = (playerResult: Player) => {
       }
 
       if (result.type === "combat") {
+        setCombatParticipants([currentPlayerIndex]);
         setCombatEnemy(result.enemy);
         setPhase("COMBAT");
         return;
@@ -488,6 +501,47 @@ const applyPlayerResult = (playerResult: Player) => {
     const node = nodes.find((n) => n.id === pendingEventNodeId);
     const player = players[currentPlayerIndex];
 
+    if (pendingNodeInteraction) {
+      const interactionNode = nodes.find((n) => n.id === pendingNodeInteraction.nodeId);
+
+      if (!interactionNode) {
+        setEventMessage(null);
+        setPendingNodeInteraction(null);
+        setCombatParticipants([]);
+        setPhase("MOVE");
+        return;
+      }
+      if (choiceId === "engage_battle") {
+        const participants = players
+          .map((p, idx) => ({ p, idx }))
+          .filter(({ p }) => !p.isDead && p.currentNode === interactionNode.id)
+          .map(({ idx }) => idx);
+
+        setCombatParticipants(participants);
+
+        const enemy = createEnemyFromNode(interactionNode);
+
+        setEventMessage(null);
+        setPendingNodeInteraction(null);
+        setCombatEnemy(enemy);
+        setPhase("COMBAT");
+        return;
+      }
+      if (choiceId === "wait_for_party") {
+        setCombatParticipants((prev) =>
+          prev.includes(currentPlayerIndex) ? prev : [...prev, currentPlayerIndex]
+        );
+
+        setEventMessage({
+          title: "Attente",
+          text: "Vous restez sur place et attendez pour ce tour.",
+        });
+
+        endTurn(interactionNode.id);
+        return;
+      }
+    }
+
     if (!node || !player || !pendingChoiceContext) {
       setEventMessage(null);
       setPendingEventNodeId(null);
@@ -519,6 +573,7 @@ const applyPlayerResult = (playerResult: Player) => {
         setEventMessage(null);
         setPendingEventNodeId(null);
         setPendingChoiceContext(null);
+        setCombatParticipants([currentPlayerIndex]);
         setCombatEnemy(eliteGuardian);
         setPhase("COMBAT");
         return;
@@ -727,17 +782,18 @@ const applyPlayerResult = (playerResult: Player) => {
             label: "Mimique",
           });
 
-          setPendingEventNodeId(null);
-          setPendingChoiceContext(null);
-          setEventMessage(null);
-          setCombatEnemy({
-            ...mimic,
-            name: "☠️ Mimique corrompue",
-            hp: Math.floor(mimic.hp * 1.3),
-            maxHp: Math.floor(mimic.maxHp * 1.3),
-          });
-          setPhase("COMBAT");
-          return;
+        setPendingEventNodeId(null);
+        setPendingChoiceContext(null);
+        setEventMessage(null);
+        setCombatParticipants([currentPlayerIndex]);
+        setCombatEnemy({
+          ...mimic,
+          name: "☠️ Mimique corrompue",
+          hp: Math.floor(mimic.hp * 1.3),
+          maxHp: Math.floor(mimic.maxHp * 1.3),
+        });
+        setPhase("COMBAT");
+        return;
         }
 
         const nextPlayer =
@@ -938,28 +994,57 @@ const applyPlayerResult = (playerResult: Player) => {
     }
   };
   
+  const getBossEngageText = () => {
+    if (currentFloorStatues === 0) {
+      return "Le boss est devant vous. Aucune statuette n’a été récupérée : il sera déchaîné. Voulez-vous lancer le combat maintenant ou attendre les autres joueurs ?";
+    }
+
+    if (currentFloorStatues === 1) {
+      return "Le boss est devant vous. Une seule statuette a été récupérée : il restera renforcé. Voulez-vous lancer le combat maintenant ou attendre les autres joueurs ?";
+    }
+
+    return "Le boss est devant vous. Il a été correctement affaibli. Voulez-vous lancer le combat maintenant ou attendre les autres joueurs ?";
+  };
+
   const handleNodeClick = (nodeId: number) => {
     if (phase !== "MOVE" || !currentPlayer) return;
 
     const current = nodes.find((n) => n.id === currentPlayer.currentNode);
     if (!current) return;
+    if (
+      pendingNodeInteraction &&
+      pendingNodeInteraction.nodeId === current.id
+    ) {
+      setPhase("EVENT");
+      setEventMessage({
+        title: current.type === "boss" ? "Boss en attente" : "Combat en attente",
+        text:
+          current.type === "boss"
+            ? getBossEngageText()
+            : current.eventType === "elite"
+            ? "Un ennemi d'élite bloque le passage. Voulez-vous engager le combat maintenant ou attendre les autres joueurs ?"
+            : "Un combat vous attend sur cette case. Voulez-vous engager le combat maintenant ou attendre les autres joueurs ?",
+        choices: [
+          {
+            id: "engage_battle",
+            label: "Engager le combat",
+            description: "Lancer le combat immédiatement.",
+          },
+          {
+            id: "wait_for_party",
+            label: "Attendre les autres",
+            description: "Rester sur place et passer le tour.",
+          },
+        ],
+      });
+      return;
+    }
     if (!current.neighbors.includes(nodeId)) return;
-      const targetNode = nodes.find((n) => n.id === nodeId);
-      if (!targetNode) return;
 
-      if (targetNode.type === "boss") {
-        if (currentFloorStatues === 0) {
-          setEventMessage({
-            title: "Gardien déchaîné",
-            text: "Vous approchez du boss sans avoir récupéré de statuette. Il sera presque impossible à vaincre.",
-          });
-        } else if (currentFloorStatues === 1) {
-          setEventMessage({
-            title: "Gardien instable",
-            text: "Une seule statuette a été récupérée. Le boss reste renforcé.",
-          });
-        }
-      }
+    const targetNode = nodes.find((n) => n.id === nodeId);
+    const waitingOnThisNode =
+    pendingNodeInteraction && pendingNodeInteraction.nodeId === nodeId;
+    if (!targetNode) return;
 
     setPreviousNode(current.id);
 
@@ -971,49 +1056,112 @@ const applyPlayerResult = (playerResult: Player) => {
 
     setNodes((prevNodes) => revealAroundNode(prevNodes, nodeId));
 
+    if (waitingOnThisNode) {
+      setPendingNodeInteraction({
+        nodeId,
+        playerIndex: pendingNodeInteraction.playerIndex,
+      });
+
+      setPhase("EVENT");
+      setEventMessage({
+        title: targetNode.type === "boss" ? "Boss en attente" : "Combat en attente",
+        text: "Un autre joueur attend déjà ici. Voulez-vous rejoindre le combat ou attendre avec lui ?",
+        choices: [
+          {
+            id: "engage_battle",
+            label: "Lancer le combat",
+            description: "Commencer le combat avec tous les joueurs présents.",
+          },
+          {
+            id: "wait_for_party",
+            label: "Se joindre à l'attente",
+            description: "Rester sur place et attendre encore.",
+          },
+        ],
+      });
+
+      return;
+    }
+    if (requiresNodeInteractionChoice(targetNode)) {
+      setPendingNodeInteraction({
+        nodeId,
+        playerIndex: currentPlayerIndex,
+      });
+
+      setPhase("EVENT");
+
+      setEventMessage({
+        title:
+          targetNode.type === "boss"
+            ? "Boss repéré"
+            : targetNode.eventType === "elite"
+            ? "Ennemi d'élite"
+            : "Zone hostile",
+        text:
+          targetNode.type === "boss"
+            ? getBossEngageText()
+            : targetNode.eventType === "elite"
+            ? "Un ennemi d'élite bloque le passage. Voulez-vous engager le combat maintenant ou attendre les autres joueurs ?"
+            : "Un combat vous attend sur cette case. Voulez-vous engager le combat maintenant ou attendre les autres joueurs ?",
+        choices: [
+          {
+            id: "engage_battle",
+            label: "Engager le combat",
+            description: "Lancer le combat immédiatement.",
+          },
+          {
+            id: "wait_for_party",
+            label: "Attendre les autres",
+            description: "Rester sur place et passer le tour.",
+          },
+        ],
+      });
+
+      return;
+    }
+
     setPhase("EVENT");
     triggerEvent(nodeId);
   };
 
-  const handleWinCombat = (remainingStats: Stats) => {
+  const handleWinCombat = (results: CombatResultPlayer[]) => {
     const currentNode = nodes.find((n) => n.id === currentPlayer?.currentNode);
     const xpGained = combatEnemy ? getXpReward(combatEnemy, currentNode) : 25;
 
     if (currentNode?.type === "boss") {
       setCombatEnemy(null);
+      setPendingNodeInteraction(null);
+      setCombatParticipants([]);
       setPhase("EVENT");
 
       const nextFloor = currentFloor + 1;
 
       if (nextFloor > FLOORS.length) {
         setCombatEnemy(null);
+        setPendingNodeInteraction(null);
+        setCombatParticipants([]);
         setVictory(true);
         return;
       }
 
       const nextFloorData = FLOORS.find((f) => f.floor === nextFloor);
       const nextBiome = pickFloorBiome(nextFloorData);
-      const generated = generateGridMap({
-        biome: nextBiome,
-      });
+      const generated = generateGridMap({ biome: nextBiome });
       setCurrentFloorBiome(nextBiome);
 
       const startNode = generated.nodes.find((n) => n.kind === "start");
       const startNodeId = startNode?.id ?? 0;
       const revealedNodes = revealAroundNode(generated.nodes, startNodeId);
-      
+
       setNodes(revealedNodes);
       setMapWidth(generated.width);
       setMapHeight(generated.height);
-
       setCurrentFloor(nextFloor);
-
       setCorruptionLevel(0);
       setCorruptionCharge(0);
       setCorruptedNodeIds([startNodeId]);
       setCurrentFloorStatues(0);
       setFloorCorruptionTurn(0);
-
       setPhase("MOVE");
       setPreviousNode(null);
 
@@ -1024,34 +1172,28 @@ const applyPlayerResult = (playerResult: Player) => {
         }))
       );
 
-      showEventMessage(
-        "Étage suivant",
-        `Vous descendez vers l'étage ${nextFloor}.`
-      );
-
+      showEventMessage("Étage suivant", `Vous descendez vers l'étage ${nextFloor}.`);
       return;
     }
 
     setCombatEnemy(null);
+    setPendingNodeInteraction(null);
+    setCombatParticipants([]);
 
     setPlayers((prevPlayers) =>
       prevPlayers.map((p, idx) => {
-        if (idx !== currentPlayerIndex) return p;
+        if (!combatParticipants.includes(idx)) return p;
 
-        const bonus = getEquipmentBonuses(p);
+        const result = results.find((r) => r.playerId === p.id);
+        if (!result) return p;
 
-        const baseStats: Stats = {
-          hp: Math.min(remainingStats.hp, remainingStats.maxHp - bonus.maxHp),
-          maxHp: remainingStats.maxHp - bonus.maxHp,
-          mana: Math.min(remainingStats.mana, remainingStats.maxMana - bonus.maxMana),
-          maxMana: remainingStats.maxMana - bonus.maxMana,
-          strength: remainingStats.strength - bonus.strength,
-          magic: remainingStats.magic - bonus.magic,
-          defense: remainingStats.defense - bonus.defense,
-        };
+        const baseStats = restorePersistentPlayerStatsFromCombat(p, result.stats);
+
         let updatedBasePlayer: Player = consumeCombatMapEffects({
           ...p,
           stats: baseStats,
+          statuses: result.statuses,
+          isDead: result.isDead,
         });
 
         const isEliteSource =
@@ -1074,18 +1216,12 @@ const applyPlayerResult = (playerResult: Player) => {
         }
 
         if (combatEnemy?.grantsStatueOnWin) {
-          setCurrentFloorStatues((prev) =>
-            Math.min(REQUIRED_STATUES, prev + 1)
-          );
+          setCurrentFloorStatues((prev) => Math.min(REQUIRED_STATUES, prev + 1));
 
           setNodes((prevNodes) =>
             prevNodes.map((n) =>
               n.id === currentNode?.id
-                ? {
-                    ...n,
-                    isConsumed: true,
-                    label: "Statuette récupérée",
-                  }
+                ? { ...n, isConsumed: true, label: "Statuette récupérée" }
                 : n
             )
           );
@@ -1095,11 +1231,14 @@ const applyPlayerResult = (playerResult: Player) => {
             text: "Le gardien s'effondre. Vous récupérez la statuette.",
           });
         }
+
         if (
           currentNode &&
-          (currentNode.eventType === "merchant_blacksmith" ||
+          (
+            currentNode.eventType === "merchant_blacksmith" ||
             currentNode.eventType === "merchant_alchemist" ||
-            currentNode.eventType === "merchant_mystic") &&
+            currentNode.eventType === "merchant_mystic"
+          ) &&
           combatEnemy?.name.includes("corrompu")
         ) {
           setNodes((prevNodes) =>
@@ -1116,57 +1255,90 @@ const applyPlayerResult = (playerResult: Player) => {
           );
         }
 
-        return applyXpAndLevelUp(updatedBasePlayer, xpGained, handleLevelUp); 
+        return applyXpAndLevelUp(updatedBasePlayer, xpGained, handleLevelUp);
       })
     );
 
     endTurn();
   };
 
-  const handleDefeatCombat = () => {
-    if (!currentPlayer) return;
-
+  const handleDefeatCombat = (results: CombatResultPlayer[]) => {
     setCombatEnemy(null);
-    alert(`${currentPlayer.name} est tombé au combat !`);
-
-    setPlayers((prevPlayers) =>
-      prevPlayers.map((p, idx) =>
-        idx === currentPlayerIndex
-          ? { ...p, isDead: true, stats: { ...p.stats, hp: 0 } }
-          : p
-      )
-    );
-
-    endTurn();
-  };
-
-  const handleFleeCombat = (remainingStats: Stats) => {
-    setCombatEnemy(null);
+    setPendingNodeInteraction(null);
+    setCombatParticipants([]);
+    setPendingEventNodeId(null);
+    setPendingChoiceContext(null);
+    setEventMessage(null);
 
     setPlayers((prevPlayers) =>
       prevPlayers.map((p, idx) => {
-        if (idx !== currentPlayerIndex) return p;
+        if (!combatParticipants.includes(idx)) return p;
 
-        const bonus = getEquipmentBonuses(p);
+        const result = results.find((r) => r.playerId === p.id);
 
-        const baseStats: Stats = {
-          hp: Math.min(remainingStats.hp, remainingStats.maxHp - bonus.maxHp),
-          maxHp: remainingStats.maxHp - bonus.maxHp,
-          mana: Math.min(remainingStats.mana, remainingStats.maxMana - bonus.maxMana),
-          maxMana: remainingStats.maxMana - bonus.maxMana,
-          strength: remainingStats.strength - bonus.strength,
-          magic: remainingStats.magic - bonus.magic,
-          defense: remainingStats.defense - bonus.defense,
+        return {
+          ...p,
+          isDead: result?.isDead ?? true,
+          stats: {
+            ...p.stats,
+            hp: result?.isDead ? 0 : (result?.stats.hp ?? p.stats.hp),
+            mana: result?.stats.mana ?? p.stats.mana,
+          },
+          statuses: result?.statuses ?? p.statuses ?? [],
         };
+      })
+    );
+
+    setPhase("MOVE");
+
+    setTimeout(() => {
+      endTurn();
+    }, 50);
+  };
+
+  const handleFleeCombat = (results: CombatResultPlayer[]) => {
+    setCombatEnemy(null);
+    setPendingNodeInteraction(null);
+    setCombatParticipants([]);
+
+    setPlayers((prevPlayers) =>
+      prevPlayers.map((p, idx) => {
+        if (!combatParticipants.includes(idx)) return p;
+
+        const result = results.find((r) => r.playerId === p.id);
+        if (!result) return p;
+
+        const baseStats = restorePersistentPlayerStatsFromCombat(p, result.stats);
 
         return consumeCombatMapEffects({
           ...p,
           stats: baseStats,
+          statuses: result.statuses,
+          isDead: result.isDead,
         });
       })
     );
 
     endTurn();
+  };
+
+  const getStartingPassives = (classType: ClassType) => {
+    switch (classType) {
+      case "Guerrier":
+        return [PLAYER_PASSIVES.iron_skin()];
+      case "Mage":
+        return [PLAYER_PASSIVES.mana_surge()];
+      case "Archer":
+        return [PLAYER_PASSIVES.eagle_eye()];
+      case "Voleur":
+        return [PLAYER_PASSIVES.toxic_blade()];
+      case "Invocateur":
+        return [PLAYER_PASSIVES.soul_feast()];
+      case "Clerc":
+        return [PLAYER_PASSIVES.divine_reserve()];
+      default:
+        return [];
+    }
   };
 
   const addPlayer = () => {
@@ -1191,6 +1363,7 @@ const applyPlayerResult = (playerResult: Player) => {
           xpToNextLevel: 100,
           statuses: [],
           mapEffects: [],
+          passives: getStartingPassives(selectedClass),
           traits: [],
           gold: 50,
           inventory: [],
@@ -1259,17 +1432,19 @@ const applyPlayerResult = (playerResult: Player) => {
   };
 
   const startGame = () => {
-  const biome = pickFloorBiome(floorData);
-  const generated = generateGridMap({ biome });
-  setCurrentFloorBiome(biome);
+    const biome = pickFloorBiome(floorData);
+    const generated = generateGridMap({ biome });
+    setCurrentFloorBiome(biome);
+    setPendingChoiceContext(null);
+    setPendingEventNodeId(null);
+    setPendingNodeInteraction(null);
+    setCombatParticipants([]);
 
     const startNode = generated.nodes.find((n) => n.kind === "start");
     const startNodeId = startNode?.id ?? 0;
 
     const revealedNodes = revealAroundNode(generated.nodes, startNodeId);
     setFloorCorruptionTurn(0);
-    setPendingChoiceContext(null);
-    setPendingEventNodeId(null);
     
     setCorruptionLevel(0);
     setCorruptionCharge(0);
@@ -1302,6 +1477,36 @@ const applyPlayerResult = (playerResult: Player) => {
       behavior: "smooth",
     });
   }, [currentPlayerIndex, gameStarted, currentPlayer, nodes]);
+
+  useEffect(() => {
+    if (!pendingNodeInteraction || !currentPlayer || phase !== "MOVE") return;
+
+    if (currentPlayer.currentNode === pendingNodeInteraction.nodeId) {
+      const currentNode = nodes.find((n) => n.id === pendingNodeInteraction.nodeId);
+      if (!currentNode) return;
+
+      setPhase("EVENT");
+      setEventMessage({
+        title: currentNode.type === "boss" ? "Boss en attente" : "Combat en attente",
+        text:
+          currentNode.type === "boss"
+            ? "Vous êtes devant le boss. Voulez-vous lancer le combat maintenant ou continuer à attendre ?"
+            : "Vous êtes sur une zone hostile. Voulez-vous lancer le combat maintenant ou continuer à attendre ?",
+        choices: [
+          {
+            id: "engage_battle",
+            label: "Engager le combat",
+            description: "Lancer le combat immédiatement.",
+          },
+          {
+            id: "wait_for_party",
+            label: "Attendre les autres",
+            description: "Rester sur place et passer le tour.",
+          },
+        ],
+      });
+    }
+  }, [pendingNodeInteraction, currentPlayer, phase, nodes]);
 
   if (victory) {
     return (
@@ -1473,20 +1678,29 @@ const applyPlayerResult = (playerResult: Player) => {
               eventMessage={eventMessage}
               onClose={() => {
                 setEventMessage(null);
-                if (phase === "EVENT" && pendingEventNodeId === null) {
+                if (
+                  phase === "EVENT" &&
+                  pendingEventNodeId === null &&
+                  pendingNodeInteraction === null
+                ) {
                   setPhase("MOVE");
                 }
               }}
               onChoice={handleEventChoice}
             />
-
-            {combatEnemy && currentPlayer && (
+            {combatEnemy && combatPlayers.length > 0 && (
               <CombatOverlay
-                player={currentPlayer}
+                players={combatPlayers}
                 enemy={combatEnemy}
-                onWin={handleWinCombat}
-                onDefeat={handleDefeatCombat}
-                onFlee={handleFleeCombat}
+                onWin={(results) => {
+                  handleWinCombat(results);
+                }}
+                onDefeat={(results) => {
+                  handleDefeatCombat(results);
+                }}
+                onFlee={(results) => {
+                  handleFleeCombat(results);
+                }}
               />
             )}
             <div className="absolute bottom-6 left-6 z-50 flex flex-col items-start gap-2">

@@ -1,6 +1,6 @@
 import { ClassType, Enemy, MapNode, Player, PlayerSkill, Stats } from "@/app/component/types/game";
 import { getUnlockedSkills } from "@/app/component/data/abilities";
-import { getEffectiveStats } from "@/app/component/lib/equipment";
+import { getDerivedPlayerStats } from "@/app/component/lib/playerStats";
 
 export function healPlayer(player: Player, hpGain: number, manaGain: number): Player {
   return {
@@ -88,17 +88,17 @@ export function getXpReward(enemy: Enemy, node: MapNode | undefined) {
 export function getLevelUpStats(classType: ClassType) {
   switch (classType) {
     case "Guerrier":
-      return { hp: 18, mana: 4, strength: 3, magic: 1, defense: 2 };
+      return { hp: 18, mana: 4, strength: 3, magic: 1, defense: 3, speed:2};
     case "Mage":
-      return { hp: 8, mana: 18, strength: 1, magic: 4, defense: 1 };
+      return { hp: 8, mana: 18, strength: 1, magic: 4, defense: 1, speed:1};
     case "Archer":
-      return { hp: 12, mana: 8, strength: 3, magic: 1, defense: 1 };
+      return { hp: 12, mana: 8, strength: 6, magic: 1, defense: 1, speed:3};
     case "Voleur":
-      return { hp: 10, mana: 6, strength: 3, magic: 1, defense: 1 };
+      return { hp: 12, mana: 6, strength: 7, magic: 1, defense: 2, speed:3 };
     case "Invocateur":
-      return { hp: 12, mana: 14, strength: 2, magic: 3, defense: 1 };
+      return { hp: 12, mana: 14, strength: 2, magic: 3, defense: 1, speed:2 };
     default:
-      return { hp: 10, mana: 5, strength: 2, magic: 1, defense: 1 };
+      return { hp: 10, mana: 5, strength: 2, magic: 1, defense: 1, speed:1 };
   }
 }
 
@@ -115,6 +115,7 @@ export function applyXpAndLevelUp(
       strength: number;
       magic: number;
       defense: number;
+      speed: number;
     };
     newSkills: PlayerSkill[];
   }) => void
@@ -168,7 +169,7 @@ export function applyXpAndLevelUp(
 }
 
 export function healPlayerWithEquipment(player: Player, hpGain: number, manaGain: number): Player {
-  const effective = getEffectiveStats(player);
+  const effective = getDerivedPlayerStats(player);
   const hpDelta = Math.min(effective.maxHp, effective.hp + hpGain) - effective.hp;
   const manaDelta = Math.min(effective.maxMana, effective.mana + manaGain) - effective.mana;
 

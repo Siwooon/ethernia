@@ -82,18 +82,58 @@ export function applyEndTurnMapEffects(player: Player) {
   };
 }
 
-export function applyMapEffectsToPlayerStats(player: Player) {
-  const woundPenalty = getMapEffectValue(player.mapEffects, "wound");
-  const blessingBonus = getMapEffectValue(player.mapEffects, "blessing");
-
-  const effectiveMaxHp = Math.max(1, player.stats.maxHp - woundPenalty);
-
-  return {
-    ...player.stats,
-    maxHp: effectiveMaxHp,
-    hp: Math.min(player.stats.hp, effectiveMaxHp),
-    magic: player.stats.magic + blessingBonus,
+export function applyMapEffectsToPlayerStats(player: {
+  stats: {
+    hp: number;
+    maxHp: number;
+    mana: number;
+    maxMana: number;
+    strength: number;
+    magic: number;
+    defense: number;
+    speed: number;
   };
+  mapEffects: {
+    type: string;
+    value: number;
+    duration: number;
+  }[];
+}) {
+  let nextStats = { ...player.stats };
+
+  for (const effect of player.mapEffects ?? []) {
+    if (effect.type === "blessing") {
+      nextStats.magic += effect.value;
+    }
+
+    if (effect.type === "protection") {
+      nextStats.defense += effect.value;
+    }
+
+    if (effect.type === "wound") {
+      nextStats.maxHp = Math.max(1, nextStats.maxHp - effect.value);
+      nextStats.hp = Math.min(nextStats.hp, nextStats.maxHp);
+    }
+
+    if (effect.type === "infection") {
+      nextStats.defense = Math.max(0, nextStats.defense - effect.value);
+    }
+
+    if (effect.type === "fatigue") {
+      nextStats.maxMana = Math.max(0, nextStats.maxMana - effect.value);
+      nextStats.mana = Math.min(nextStats.mana, nextStats.maxMana);
+    }
+
+    if (effect.type === "hex") {
+      nextStats.magic = Math.max(0, nextStats.magic - effect.value);
+    }
+
+    if (effect.type === "corruption_mark") {
+      nextStats.strength = Math.max(0, nextStats.strength - effect.value);
+    }
+  }
+
+  return nextStats;
 }
 
 export function consumeCombatMapEffects(player: Player): Player {

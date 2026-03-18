@@ -9,6 +9,7 @@ type Growth = {
   strength: number;
   magic: number;
   defense: number;
+  speed: number;
 };
 
 type Props = {
@@ -76,6 +77,10 @@ export default function LevelUpModal({
               <div className="col-span-2 bg-[#1b0a3d]/80 rounded-lg p-3 border border-violet-900">
                 <div className="text-gray-300">Défense</div>
                 <div className="text-yellow-300 font-bold">+{growth.defense}</div>
+              </div>
+              <div className="col-span-2 bg-[#1b0a3d]/80 rounded-lg p-3 border border-violet-900">
+                <div className="text-gray-300">Vitesse</div>
+                <div className="text-yellow-300 font-bold">+{growth.speed}</div>
               </div>
             </div>
 

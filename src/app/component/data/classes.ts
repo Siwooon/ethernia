@@ -14,6 +14,7 @@ export const CLASSES: Record<ClassType, ClassData> = {
       strength: 400,
       magic: 2,
       defense: 12,
+      speed: 8,
     },
   },
   Mage: {
@@ -29,6 +30,7 @@ export const CLASSES: Record<ClassType, ClassData> = {
       strength: 3,
       magic: 20,
       defense: 3,
+      speed: 7,
     },
   },
   Archer: {
@@ -44,6 +46,7 @@ export const CLASSES: Record<ClassType, ClassData> = {
       strength: 12,
       magic: 5,
       defense: 5,
+      speed: 9,
     },
   },
   Voleur: {
@@ -59,6 +62,7 @@ export const CLASSES: Record<ClassType, ClassData> = {
       strength: 10,
       magic: 4,
       defense: 4,
+      speed: 12,
     },
   },
   Invocateur: {
@@ -74,6 +78,23 @@ export const CLASSES: Record<ClassType, ClassData> = {
       strength: 6,
       magic: 14,
       defense: 6,
+      speed: 5,
     },
   },
+  Clerc: {
+    image:
+      "https://api.dicebear.com/7.x/adventurer/png?seed=Clerc&size=200&backgroundColor=8e4ae8",
+    portrait:
+      "https://api.dicebear.com/7.x/adventurer/png?seed=Clerc&size=120&backgroundColor=5e2cb8",
+    stats: {
+      hp: 95,
+      maxHp: 95,
+      mana: 70,
+      maxMana: 70,
+      strength: 5,
+      magic: 11,
+      defense: 7,
+      speed: 6,
+    },
+  }
 };

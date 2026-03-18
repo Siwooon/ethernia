@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { MapNode, Player } from "@/app/component/types/game";
-import { getEffectiveStats } from "@/app/component/lib/equipment";
+import { getDerivedPlayerStats } from "@/app/component/lib/playerStats";
 import { BIOME_VISUALS } from "@/app/component/data/biomes";
 import { FloorBiome } from "@/app/component/data/floors";
 
@@ -227,7 +227,7 @@ export default function GameMap({
             return null;
           }
 
-          const effectiveStats = getEffectiveStats(p);
+          const effectiveStats = getDerivedPlayerStats(p);
           const isActive = currentPlayer?.id === p.id && !p.isDead;
 
           return (

@@ -1,4 +1,4 @@
-import { EventType, LocationTheme, MapNode } from "@/app/component/types/game";
+import { EventType, LocationTheme, MapNode, TerrainEffect } from "@/app/component/types/game";
 import { FloorBiome } from "@/app/component/data/floors";
 
 type GridKind = "start" | "path" | "statuette" | "boss_prep" | "boss" | "stairs";
@@ -154,6 +154,33 @@ function keyOf(row: number, col: number) {
 
 function addCell(map: Map<string, TemplateCell>, cell: TemplateCell) {
   map.set(keyOf(cell.row, cell.col), cell);
+}
+
+function getDefaultTerrainEffects(
+  biome: FloorBiome,
+  eventType: EventType
+): TerrainEffect[] {
+  if (eventType === "rest") {
+    return [{ type: "sacred_ground", value: 4, scope: "node" }];
+  }
+
+  if (biome === "swamp") {
+    return [{ type: "toxic_fog", value: 3, scope: "node" }];
+  }
+
+  if (biome === "ashlands") {
+    return [{ type: "ashen_heat", value: 4, scope: "node" }];
+  }
+
+  if (biome === "cathedral" && Math.random() < 0.35) {
+    return [{ type: "mana_spring", value: 5, scope: "node" }];
+  }
+
+  if (Math.random() < 0.15) {
+    return [{ type: "storm_field", value: 5, scope: "node" }];
+  }
+
+  return [];
 }
 
 function manhattan(
@@ -574,6 +601,7 @@ const { distances, neighbors } = computeDistances(cells, startCell);
       row: cell.row,
       col: cell.col,
       kind: cell.kind,
+      terrainEffects: getDefaultTerrainEffects(biome, eventType),
       x: OFFSET_X + cell.col * CELL_SIZE,
       y: OFFSET_Y + cell.row * CELL_SIZE,
       lane: 1,

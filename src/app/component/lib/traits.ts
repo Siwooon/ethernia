@@ -1,4 +1,5 @@
 import { Enemy, Player, Stats, TraitEffect, CombatEffectContext } from "@/app/component/types/game";
+import { applyStatBonuses, getTraitStatBonuses } from "@/app/component/lib/playerStats";
 
 export function addTraitToPlayer(player: Player, trait: TraitEffect): Player {
   const alreadyHas = player.traits.some((t) => t.id === trait.id);
@@ -22,105 +23,121 @@ export function getStatTraits(traits: TraitEffect[]): TraitEffect[] {
 }
 
 export function applyTraitModifiers(baseStats: Stats, traits: TraitEffect[]): Stats {
-  const statTraits = getStatTraits(traits);
+  return applyStatBonuses(baseStats, getTraitStatBonuses(traits));
+}
 
-  const bonus = statTraits.reduce(
-    (acc, trait) => {
-      const mods = trait.modifiers ?? {};
-      acc.maxHp += mods.maxHp ?? 0;
-      acc.maxMana += mods.maxMana ?? 0;
-      acc.strength += mods.strength ?? 0;
-      acc.magic += mods.magic ?? 0;
-      acc.defense += mods.defense ?? 0;
-      return acc;
-    },
-    {
-      maxHp: 0,
-      maxMana: 0,
-      strength: 0,
-      magic: 0,
-      defense: 0,
+type TriggerResult = {
+  player: Player;
+  enemy: Enemy;
+  logs: string[];
+};
+
+function runSingleTrait(
+  trait: TraitEffect,
+  ctx: CombatEffectContext
+): TriggerResult {
+  let player = ctx.player;
+  let enemy = ctx.enemy;
+  const logs: string[] = [];
+
+  switch (trait.id) {
+    case "thorns": {
+      const reflected = trait.value ?? 0;
+
+      if (ctx.target === "player") {
+        enemy = {
+          ...enemy,
+          hp: Math.max(0, enemy.hp - reflected),
+        };
+        logs.push(`${trait.name} inflige ${reflected} dégâts à l'ennemi.`);
+      }
+
+      if (ctx.target === "enemy") {
+        player = {
+          ...player,
+          stats: {
+            ...player.stats,
+            hp: Math.max(0, player.stats.hp - reflected),
+          },
+        };
+        logs.push(`${trait.name} inflige ${reflected} dégâts au joueur.`);
+      }
+
+      break;
     }
-  );
 
-  return {
-    ...baseStats,
-    hp: Math.min(baseStats.hp + bonus.maxHp, baseStats.maxHp + bonus.maxHp),
-    maxHp: baseStats.maxHp + bonus.maxHp,
-    mana: Math.min(baseStats.mana + bonus.maxMana, baseStats.maxMana + bonus.maxMana),
-    maxMana: baseStats.maxMana + bonus.maxMana,
-    strength: baseStats.strength + bonus.strength,
-    magic: baseStats.magic + bonus.magic,
-    defense: baseStats.defense + bonus.defense,
-  };
+    case "mana_shield": {
+      if (ctx.target === "player" && player.stats.mana > 0) {
+        const manaLoss = Math.min(player.stats.mana, trait.value ?? 0);
+        player = {
+          ...player,
+          stats: {
+            ...player.stats,
+            mana: Math.max(0, player.stats.mana - manaLoss),
+          },
+        };
+        logs.push(`${trait.name} consomme ${manaLoss} mana.`);
+      }
+      break;
+    }
+
+    case "regen_turn": {
+      const healValue = trait.value ?? 0;
+
+      if (ctx.source === "player") {
+        player = {
+          ...player,
+          stats: {
+            ...player.stats,
+            hp: Math.min(player.stats.maxHp, player.stats.hp + healValue),
+          },
+        };
+        logs.push(`${trait.name} rend ${healValue} PV.`);
+      } else {
+        enemy = {
+          ...enemy,
+          hp: Math.min(enemy.maxHp, enemy.hp + healValue),
+        };
+        logs.push(`${trait.name} rend ${healValue} PV à l'ennemi.`);
+      }
+      break;
+    }
+  }
+
+  return { player, enemy, logs };
 }
 
 export function runTriggeredTraits(
   trigger: TraitEffect["trigger"],
   traits: TraitEffect[],
   ctx: CombatEffectContext
-): { player: Player; enemy: Enemy; logs: string[] } {
-  let player = ctx.player;
-  let enemy = ctx.enemy;
+): TriggerResult {
+  let currentPlayer = ctx.player;
+  let currentEnemy = ctx.enemy;
   const logs: string[] = [];
 
   for (const trait of traits) {
     if (trait.trigger !== trigger) continue;
 
-    switch (trait.id) {
-      case "thorns":
-        if (ctx.target === "player") {
-          enemy = {
-            ...enemy,
-            hp: Math.max(0, enemy.hp - (trait.value ?? 0)),
-          };
-          logs.push(`${trait.name} inflige ${trait.value ?? 0} dégâts à l'ennemi.`);
-        }
-        if (ctx.target === "enemy") {
-          player = {
-            ...player,
-            stats: {
-              ...player.stats,
-              hp: Math.max(0, player.stats.hp - (trait.value ?? 0)),
-            },
-          };
-          logs.push(`${trait.name} inflige ${trait.value ?? 0} dégâts au joueur.`);
-        }
-        break;
-
-      case "mana_shield":
-        if (ctx.target === "player" && player.stats.mana > 0) {
-          player = {
-            ...player,
-            stats: {
-              ...player.stats,
-              mana: Math.max(0, player.stats.mana - (trait.value ?? 0)),
-            },
-          };
-          logs.push(`${trait.name} consomme ${trait.value ?? 0} mana.`);
-        }
-        break;
-
-      case "regen_turn":
-        if (ctx.source === "player") {
-          player = {
-            ...player,
-            stats: {
-              ...player.stats,
-              hp: Math.min(player.stats.maxHp, player.stats.hp + (trait.value ?? 0)),
-            },
-          };
-          logs.push(`${trait.name} rend ${trait.value ?? 0} PV.`);
-        } else {
-          enemy = {
-            ...enemy,
-            hp: Math.min(enemy.maxHp, enemy.hp + (trait.value ?? 0)),
-          };
-          logs.push(`${trait.name} rend ${trait.value ?? 0} PV à l'ennemi.`);
-        }
-        break;
+    if (trait.chance && Math.random() > trait.chance) {
+      continue;
     }
+
+    const result = runSingleTrait(trait, {
+      ...ctx,
+      player: currentPlayer,
+      enemy: currentEnemy,
+      trait,
+    });
+
+    currentPlayer = result.player;
+    currentEnemy = result.enemy;
+    logs.push(...result.logs);
   }
 
-  return { player, enemy, logs };
+  return {
+    player: currentPlayer,
+    enemy: currentEnemy,
+    logs,
+  };
 }

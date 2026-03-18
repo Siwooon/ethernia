@@ -1,45 +1,23 @@
 import { equipItem, unequipItem } from "@/app/component/lib/equipment";
 import { InventoryItem, Player } from "@/app/component/types/game";
 import { generateId } from "@/app/component/lib/id";
-
-function stackOrInsertItem(inventory: InventoryItem[], item: InventoryItem): InventoryItem[] {
-  const existingIndex = inventory.findIndex(
-    (invItem) =>
-      invItem.name === item.name &&
-      invItem.type === item.type &&
-      invItem.slot === item.slot
-  );
-
-  if (existingIndex === -1) {
-    return [...inventory, item];
-  }
-
-  const updatedInventory = [...inventory];
-  updatedInventory[existingIndex] = {
-    ...updatedInventory[existingIndex],
-    quantity: updatedInventory[existingIndex].quantity + item.quantity,
-  };
-
-  return updatedInventory;
-}
+import {
+  addItemToInventoryList,
+  cloneInventoryItem,
+  removeOneItemFromInventoryList,
+} from "@/app/component/lib/inventoryHelpers";
 
 export function addItemToInventory(player: Player, item: InventoryItem): Player {
   return {
     ...player,
-    inventory: stackOrInsertItem(player.inventory, item),
+    inventory: addItemToInventoryList(player.inventory, item),
   };
 }
 
 export function removeOneItemFromInventory(player: Player, itemId: string): Player {
-  const updatedInventory = player.inventory
-    .map((item) =>
-      item.id === itemId ? { ...item, quantity: item.quantity - 1 } : item
-    )
-    .filter((item) => item.quantity > 0);
-
   return {
     ...player,
-    inventory: updatedInventory,
+    inventory: removeOneItemFromInventoryList(player.inventory, itemId),
   };
 }
 
@@ -69,7 +47,10 @@ export function equipInventoryItem(player: Player, itemId: string): Player {
   return equipItem(player, item);
 }
 
-export function unequipInventorySlot(player: Player, slot: "weapon" | "armor" | "relic"): Player {
+export function unequipInventorySlot(
+  player: Player,
+  slot: "weapon" | "armor" | "relic"
+): Player {
   return unequipItem(player, slot);
 }
 
@@ -82,11 +63,10 @@ export function buyItem(player: Player, item: InventoryItem): Player {
       ...player,
       gold: player.gold - price,
     },
-    {
-      ...item,
+    cloneInventoryItem(item, {
       id: generateId(),
       quantity: 1,
-    }
+    })
   );
 }
 
@@ -95,7 +75,6 @@ export function sellItem(player: Player, itemId: string): Player {
   if (!item) return player;
 
   const sellValue = item.sellPrice || 0;
-
   const updatedPlayer = removeOneItemFromInventory(player, itemId);
 
   return {
