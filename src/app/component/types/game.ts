@@ -97,17 +97,6 @@ export interface InventoryItem {
   };
 }
 
-export type CombatEffectContext = {
-  source: Enemy | Player;
-  target?: Enemy | Player;
-
-  player: Player;
-  enemy: Enemy;
-
-  
-  turn: number;
-};
-
 export type PassiveEffect = { // to be removed
   id: string;
   name: string;
