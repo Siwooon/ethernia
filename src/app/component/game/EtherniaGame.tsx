@@ -9,6 +9,8 @@ import EventModal from "./EventModal";
 import LobbyScreen from "./LobbyScreen";
 import GameHUD from "./GameHUD";
 import GameMap from "./GameMap";
+import CombatResultModal from "./CombatResultModal";
+
 import { equipInventoryItem,unequipInventorySlot, consumeItem, addItemToInventory, buyItem, sellItem  } from "@/app/component/lib/inventory";
 import { FLOORS, FloorBiome } from "@/app/component/data/floors";
 import { PLAYER_PASSIVES } from "@/app/component/lib/passives";
@@ -65,6 +67,43 @@ export default function EtherniaGame() {
   } | null>(null);
   const [combatParticipants, setCombatParticipants] = useState<number[]>([]);
 
+  const [combatResultModal, setCombatResultModal] = useState<{
+    open: boolean;
+    kind: "victory" | "defeat" | "flee";
+    title: string;
+    summary: string;
+    xp?: number;
+    gold?: number;
+    rewards?: string[];
+    players: {
+      name: string;
+      hp: number;
+      maxHp: number;
+      mana: number;
+      maxMana: number;
+      isDead: boolean;
+    }[];
+    xpStates?: {
+      playerId: number;
+      playerName: string;
+      level: number;
+      currentXp: number;
+      xpToNextLevel: number;
+      gainedXp: number;
+    }[];
+    onCloseAction?: () => void;
+  }>({
+    open: false,
+    kind: "victory",
+    title: "",
+    summary: "",
+    xp: 0,
+    gold: 0,
+    rewards: [],
+    players: [],
+    xpStates: [],
+  });
+
   const [mapHeight, setMapHeight] = useState(1200);
 
   const [phase, setPhase] = useState<"MOVE" | "EVENT" | "COMBAT">("MOVE");
@@ -111,6 +150,151 @@ export default function EtherniaGame() {
     if (currentFloorStatues >= 2) return "Boss normal";
     if (currentFloorStatues === 1) return "Boss partiellement affaibli";
     return "Boss déchaîné";
+  };
+  
+  const openCombatResultModal = (payload: {
+    kind: "victory" | "defeat" | "flee";
+    title: string;
+    summary: string;
+    xp?: number;
+    gold?: number;
+    rewards?: string[];
+    players: {
+      name: string;
+      hp: number;
+      maxHp: number;
+      mana: number;
+      maxMana: number;
+      isDead: boolean;
+    }[];
+    xpStates?: {
+      playerId: number;
+      playerName: string;
+      level: number;
+      currentXp: number;
+      xpToNextLevel: number;
+      gainedXp: number;
+    }[];
+    onCloseAction?: () => void;
+  }) => {
+    setCombatResultModal({
+      open: true,
+      kind: payload.kind,
+      title: payload.title,
+      summary: payload.summary,
+      xp: payload.xp ?? 0,
+      gold: payload.gold ?? 0,
+      rewards: payload.rewards ?? [],
+      players: payload.players,
+      xpStates: payload.xpStates ?? [],
+      onCloseAction: payload.onCloseAction,
+    });
+  };
+
+  const closeCombatResultModal = () => {
+    const action = combatResultModal.onCloseAction;
+    setCombatResultModal((prev) => ({
+      ...prev,
+      open: false,
+      onCloseAction: undefined,
+    }));
+    action?.();
+  };
+
+  const buildCombatRecapPlayers = (results: CombatResultPlayer[]) => {
+    return combatParticipants
+      .map((idx) => players[idx])
+      .filter((p): p is Player => Boolean(p))
+      .map((p) => {
+        const result = results.find((r) => r.playerId === p.id);
+        const stats = result?.stats ?? p.stats;
+
+        return {
+          name: p.name,
+          hp: stats.hp,
+          maxHp: stats.maxHp,
+          mana: stats.mana,
+          maxMana: stats.maxMana,
+          isDead: result?.isDead ?? p.isDead,
+        };
+      });
+  };
+
+  const buildCombatXpStates = (xpGained: number) => {
+    return combatParticipants
+      .map((idx) => players[idx])
+      .filter((p): p is Player => Boolean(p))
+      .map((p) => ({
+        playerId: p.id,
+        playerName: p.name,
+        level: p.level,
+        currentXp: p.xp,
+        xpToNextLevel: p.xpToNextLevel,
+        gainedXp: xpGained,
+    }));
+  };
+
+  const reviveDeadAllyFromShrine = (
+    roster: Player[],
+    sacrificerIndex: number,
+    corrupted: boolean
+  ): { nextPlayers: Player[]; revivedPlayerName: string | null } => {
+    const deadIndex = roster.findIndex((p, idx) => idx !== sacrificerIndex && p.isDead);
+    if (deadIndex === -1) {
+      return { nextPlayers: roster, revivedPlayerName: null };
+    }
+
+    const hpMaxCost = corrupted ? 20 : 12;
+
+    const nextPlayers = roster.map((p, idx) => {
+      if (idx === sacrificerIndex) {
+        const nextMaxHp = Math.max(20, p.stats.maxHp - hpMaxCost);
+        return {
+          ...p,
+          stats: {
+            ...p.stats,
+            maxHp: nextMaxHp,
+            hp: Math.min(p.stats.hp, nextMaxHp),
+          },
+        };
+      }
+
+      if (idx === deadIndex) {
+        const revivedHp = Math.max(1, Math.floor(p.stats.maxHp * 0.5));
+        return {
+          ...p,
+          isDead: false,
+          stats: {
+            ...p.stats,
+            hp: revivedHp,
+          },
+        };
+      }
+
+      return p;
+    });
+
+    return {
+      nextPlayers,
+      revivedPlayerName: roster[deadIndex]?.name ?? null,
+    };
+  };
+
+  const reviveDeadPlayersAtNewFloor = (roster: Player[]): Player[] => {
+    return roster.map((p) => {
+      if (!p.isDead) return p;
+
+      const revivedHp = Math.max(1, Math.floor(p.stats.maxHp * 0.5));
+
+      return {
+        ...p,
+        isDead: false,
+        stats: {
+          ...p.stats,
+          hp: revivedHp,
+        },
+      };
+    });
   };
 
   const requiresNodeInteractionChoice = (node: MapNode) => {
@@ -297,6 +481,27 @@ export default function EtherniaGame() {
 
       return nextCharge;
     });
+  };
+
+  const applyPartyCorruptionBoon = (
+    bonuses: Partial<Pick<Stats, "strength" | "magic" | "defense">>,
+    corruptionGain: number,
+    title: string,
+    text: string
+  ) => {
+    setPlayers((prevPlayers) =>
+      prevPlayers.map((p) => (p.isDead ? p : buffPlayerStats(p, bonuses)))
+    );
+    addCorruptionCharge(corruptionGain);
+    setEventMessage({ title, text });
+  };
+
+  const markNodeResolved = (nodeId: number, label: string) => {
+    setNodes((prevNodes) =>
+      prevNodes.map((n) =>
+        n.id === nodeId ? { ...n, isConsumed: true, label } : n
+      )
+    );
   };
 
   const handleLevelUp = (payload: {
@@ -624,23 +829,17 @@ export default function EtherniaGame() {
         });
 
         applyPlayerResult(nextPlayer);
-        addCorruptionCharge(35);
-        setCurrentFloorStatues((prev) => Math.min(REQUIRED_STATUES, prev + 1));
-
-        setNodes((prevNodes) =>
-          prevNodes.map((n) =>
-            n.id === node.id
-              ? { ...n, isConsumed: true, label: "Statuette absorbée" }
-              : n
-          )
+        applyPartyCorruptionBoon(
+          { strength: 1 },
+          35,
+          "Pouvoir absorbé",
+          "Vous avalez l'éclat de la statuette. Le porteur gagne +1 Force, +1 Magie, +1 Défense et toute l'équipe gagne +1 Force. En échange, la corruption s'emballe."
         );
+        setCurrentFloorStatues((prev) => Math.min(REQUIRED_STATUES, prev + 1));
+        markNodeResolved(node.id, "Statuette absorbée");
 
         setPendingEventNodeId(null);
         setPendingChoiceContext(null);
-        setEventMessage({
-          title: "Pouvoir absorbé",
-          text: "Vous absorbez l'énergie de la statuette. +1 Force, +1 Magie, +1 Défense, +1 statuette, mais la corruption progresse.",
-        });
         endTurn(node.id);
         return;
       }
@@ -654,7 +853,7 @@ export default function EtherniaGame() {
             ...player.stats,
             hp: Math.min(
               player.stats.maxHp,
-              player.stats.hp + (pendingChoiceContext.corrupted ? 15 : 30)
+              player.stats.hp + (pendingChoiceContext.corrupted ? 18 : 30)
             ),
           },
         };
@@ -669,10 +868,14 @@ export default function EtherniaGame() {
 
         setPendingEventNodeId(null);
         setPendingChoiceContext(null);
+        if (pendingChoiceContext.corrupted) {
+          addCorruptionCharge(10);
+        }
+
         setEventMessage({
           title: "Repos",
           text: pendingChoiceContext.corrupted
-            ? "Vous dormez d'un sommeil troublé. +15 PV."
+            ? "Vous dormez dans le soufre. +18 PV, mais la corruption gagne 10 points."
             : "Vous récupérez profondément. +30 PV.",
         });
         endTurn(node.id);
@@ -680,13 +883,17 @@ export default function EtherniaGame() {
       }
 
       if (choiceId === "rest_focus") {
+        const focusedPlayer = pendingChoiceContext.corrupted
+          ? buffPlayerStats(player, { magic: 1 })
+          : player;
+
         const nextPlayer: Player = {
-          ...player,
+          ...focusedPlayer,
           stats: {
-            ...player.stats,
+            ...focusedPlayer.stats,
             mana: Math.min(
-              player.stats.maxMana,
-              player.stats.mana + (pendingChoiceContext.corrupted ? 15 : 30)
+              focusedPlayer.stats.maxMana,
+              focusedPlayer.stats.mana + (pendingChoiceContext.corrupted ? 24 : 30)
             ),
           },
         };
@@ -701,10 +908,14 @@ export default function EtherniaGame() {
 
         setPendingEventNodeId(null);
         setPendingChoiceContext(null);
+        if (pendingChoiceContext.corrupted) {
+          addCorruptionCharge(15);
+        }
+
         setEventMessage({
           title: "Méditation",
           text: pendingChoiceContext.corrupted
-            ? "Vous canalisez difficilement les énergies. +15 Mana."
+            ? "Vous laissez la faille vous traverser. +24 Mana, +1 Magie, mais la corruption gagne 15 points."
             : "Votre esprit se recentre. +30 Mana.",
         });
         endTurn(node.id);
@@ -799,9 +1010,12 @@ export default function EtherniaGame() {
         const nextPlayer =
           Math.random() < 0.5
             ? addItemToInventory(player, { ...getEliteRewardByCategory("relic")! })
-            : { ...player, gold: player.gold + 35 };
+            : { ...player, gold: player.gold + (pendingChoiceContext.corrupted ? 55 : 35) };
 
         applyPlayerResult(nextPlayer);
+        if (pendingChoiceContext.corrupted) {
+          addCorruptionCharge(20);
+        }
 
         setNodes((prevNodes) =>
           prevNodes.map((n) =>
@@ -813,7 +1027,9 @@ export default function EtherniaGame() {
         setPendingChoiceContext(null);
         setEventMessage({
           title: "Butin obtenu",
-          text: "Vous forcez le coffre et récupérez une meilleure récompense.",
+          text: pendingChoiceContext.corrupted
+            ? "Vous arrachez un butin interdit au coffre. La récompense est meilleure, mais la corruption gagne 20 points."
+            : "Vous forcez le coffre et récupérez une meilleure récompense.",
         });
         endTurn(node.id);
         return;
@@ -844,59 +1060,106 @@ export default function EtherniaGame() {
           : buffPlayerStats(player, { defense: 1, magic: 1 });
 
         applyPlayerResult(nextPlayer);
+        if (pendingChoiceContext.corrupted) {
+          applyPartyCorruptionBoon(
+            { magic: 1 },
+            15,
+            "Bénédiction interdite",
+            "L'autel noir abreuve l'équipe de puissance. Le porteur gagne +2 Magie, +1 Force et tous les héros vivants gagnent +1 Magie. En échange, la corruption gagne 15 points."
+          );
+        }
 
-        setNodes((prevNodes) =>
-          prevNodes.map((n) =>
-            n.id === node.id ? { ...n, isConsumed: true, label: "Autel utilisé" } : n
-          )
-        );
+        markNodeResolved(node.id, "Autel utilisé");
 
         setPendingEventNodeId(null);
         setPendingChoiceContext(null);
-        setEventMessage({
-          title: "Bénédiction",
-          text: pendingChoiceContext.corrupted
-            ? "L'autel vous accorde une puissance trouble."
-            : "L'autel vous bénit.",
-        });
+        if (!pendingChoiceContext.corrupted) {
+          setEventMessage({
+            title: "Bénédiction",
+            text: "L'autel vous bénit.",
+          });
+        }
         endTurn(node.id);
         return;
       }
 
       if (choiceId === "shrine_offer") {
+        const boostedPlayer = buffPlayerStats(
+          player,
+          pendingChoiceContext.corrupted
+            ? { strength: 2, magic: 2 }
+            : { defense: 2 }
+        );
+
         const nextPlayer: Player = {
-          ...buffPlayerStats(
-            player,
-            pendingChoiceContext.corrupted
-              ? { strength: 2, magic: 2 }
-              : { defense: 2 }
-          ),
+          ...boostedPlayer,
           stats: {
-            ...player.stats,
-            hp: Math.max(1, player.stats.hp - (pendingChoiceContext.corrupted ? 15 : 8)),
+            ...boostedPlayer.stats,
+            hp: Math.max(1, boostedPlayer.stats.hp - (pendingChoiceContext.corrupted ? 15 : 8)),
           },
         };
 
         applyPlayerResult(nextPlayer);
+        if (pendingChoiceContext.corrupted) {
+          applyPartyCorruptionBoon(
+            { strength: 1, magic: 1 },
+            25,
+            "Offrande sanglante",
+            "Vous nourrissez l'autel avec votre sang. Le porteur gagne +2 Force, +2 Magie et tous les héros vivants gagnent +1 Force, +1 Magie. En échange, la corruption gagne 25 points."
+          );
+        }
+
+        markNodeResolved(node.id, "Offrande faite");
+
+        setPendingEventNodeId(null);
+        setPendingChoiceContext(null);
+        if (!pendingChoiceContext.corrupted) {
+          setEventMessage({
+            title: "Offrande",
+            text: "Votre offrande est acceptée.",
+          });
+        }
+        endTurn(node.id);
+        return;
+      }
+      if (choiceId === "shrine_revive") {
+        const hasDeadAlly = players.some((p, idx) => idx !== currentPlayerIndex && p.isDead);
+
+        if (!hasDeadAlly) {
+          setEventMessage({
+            title: "Silence de l’autel",
+            text: "Aucun allié mort ne peut être rappelé.",
+          });
+          return;
+        }
+
+        const { nextPlayers, revivedPlayerName } = reviveDeadAllyFromShrine(
+          players,
+          currentPlayerIndex,
+          pendingChoiceContext.corrupted
+        );
+
+        setPlayers(nextPlayers);
 
         setNodes((prevNodes) =>
           prevNodes.map((n) =>
-            n.id === node.id ? { ...n, isConsumed: true, label: "Offrande faite" } : n
+            n.id === node.id ? { ...n, isConsumed: true, label: "Rituel accompli" } : n
           )
         );
 
         setPendingEventNodeId(null);
         setPendingChoiceContext(null);
+
         setEventMessage({
-          title: "Offrande",
+          title: "Rituel de résurrection",
           text: pendingChoiceContext.corrupted
-            ? "Vous saignez pour obtenir un pouvoir interdit."
-            : "Votre offrande est acceptée.",
+            ? `${revivedPlayerName} revient d’entre les morts à moitié vivant. L’autel réclame vos forces vitales : vos PV max diminuent.`
+            : `${revivedPlayerName} est ramené à la vie. Vous offrez une part de votre vitalité : vos PV max diminuent.`,
         });
+
         endTurn(node.id);
         return;
       }
-
       if (choiceId === "shrine_leave") {
         setNodes((prevNodes) =>
           prevNodes.map((n) =>
@@ -958,6 +1221,14 @@ export default function EtherniaGame() {
             : buffPlayerStats(player, { magic: 1 });
 
         applyPlayerResult(nextPlayer);
+        if (pendingChoiceContext.corrupted) {
+          applyPartyCorruptionBoon(
+            { defense: 1 },
+            12,
+            "Présage du néant",
+            "Vous fouillez plus loin que vous n'auriez dû. Toute l'équipe gagne +1 Défense, mais la corruption gagne 12 points."
+          );
+        }
 
         setNodes((prevNodes) =>
           prevNodes.map((n) =>
@@ -967,10 +1238,12 @@ export default function EtherniaGame() {
 
         setPendingEventNodeId(null);
         setPendingChoiceContext(null);
-        setEventMessage({
-          title: "Découverte",
-          text: "Votre exploration vous rapporte quelque chose d'utile.",
-        });
+        if (!pendingChoiceContext.corrupted) {
+          setEventMessage({
+            title: "Découverte",
+            text: "Votre exploration vous rapporte quelque chose d'utile.",
+          });
+        }
         endTurn(node.id);
         return;
       }
@@ -1124,61 +1397,79 @@ export default function EtherniaGame() {
     triggerEvent(nodeId);
   };
 
+  
   const handleWinCombat = (results: CombatResultPlayer[]) => {
     const currentNode = nodes.find((n) => n.id === currentPlayer?.currentNode);
     const xpGained = combatEnemy ? getXpReward(combatEnemy, currentNode) : 25;
+    const recapPlayers = buildCombatRecapPlayers(results);
+    const xpStates = buildCombatXpStates(xpGained);
 
     if (currentNode?.type === "boss") {
-      setCombatEnemy(null);
-      setPendingNodeInteraction(null);
-      setCombatParticipants([]);
-      setPhase("EVENT");
+      openCombatResultModal({
+        kind: "victory",
+        title: "Boss vaincu",
+        summary: "Le gardien s'effondre. La route vers l'étage suivant s'ouvre.",
+        xp: xpGained,
+        players: recapPlayers,
+        xpStates,
+        onCloseAction: () => {
+          setCombatEnemy(null);
+          setPendingNodeInteraction(null);
+          setCombatParticipants([]);
+          setPhase("EVENT");
+          
+          const nextFloor = currentFloor + 1;
 
-      const nextFloor = currentFloor + 1;
+          if (nextFloor > FLOORS.length) {
+            setCombatEnemy(null);
+            setPendingNodeInteraction(null);
+            setCombatParticipants([]);
+            setVictory(true);
+            return;
+          }
 
-      if (nextFloor > FLOORS.length) {
-        setCombatEnemy(null);
-        setPendingNodeInteraction(null);
-        setCombatParticipants([]);
-        setVictory(true);
-        return;
-      }
+          const nextFloorData = FLOORS.find((f) => f.floor === nextFloor);
+          const nextBiome = pickFloorBiome(nextFloorData);
+          const generated = generateGridMap({ biome: nextBiome });
+          setCurrentFloorBiome(nextBiome);
 
-      const nextFloorData = FLOORS.find((f) => f.floor === nextFloor);
-      const nextBiome = pickFloorBiome(nextFloorData);
-      const generated = generateGridMap({ biome: nextBiome });
-      setCurrentFloorBiome(nextBiome);
+          const startNode = generated.nodes.find((n) => n.kind === "start");
+          const startNodeId = startNode?.id ?? 0;
+          const revealedNodes = revealAroundNode(generated.nodes, startNodeId);
 
-      const startNode = generated.nodes.find((n) => n.kind === "start");
-      const startNodeId = startNode?.id ?? 0;
-      const revealedNodes = revealAroundNode(generated.nodes, startNodeId);
+          setNodes(revealedNodes);
+          setMapWidth(generated.width);
+          setMapHeight(generated.height);
+          setCurrentFloor(nextFloor);
+          setCorruptionLevel(0);
+          setCorruptionCharge(0);
+          setCorruptedNodeIds([startNodeId]);
+          setCurrentFloorStatues(0);
+          setFloorCorruptionTurn(0);
+          setPhase("MOVE");
+          setPreviousNode(null);
 
-      setNodes(revealedNodes);
-      setMapWidth(generated.width);
-      setMapHeight(generated.height);
-      setCurrentFloor(nextFloor);
-      setCorruptionLevel(0);
-      setCorruptionCharge(0);
-      setCorruptedNodeIds([startNodeId]);
-      setCurrentFloorStatues(0);
-      setFloorCorruptionTurn(0);
-      setPhase("MOVE");
-      setPreviousNode(null);
+          setPlayers((prev) =>
+            reviveDeadPlayersAtNewFloor(prev).map((p) => ({
+              ...p,
+              currentNode: startNodeId,
+            }))
+          );
 
-      setPlayers((prev) =>
-        prev.map((p) => ({
-          ...p,
-          currentNode: startNode?.id ?? 0,
-        }))
-      );
-
-      showEventMessage("Étage suivant", `Vous descendez vers l'étage ${nextFloor}.`);
+          showEventMessage(
+            "Étage suivant",
+            `Vous descendez vers l'étage ${nextFloor}. Les alliés tombés se relèvent avec 50 % de leurs PV.`
+          );
+        },
+      });
       return;
     }
 
     setCombatEnemy(null);
     setPendingNodeInteraction(null);
     setCombatParticipants([]);
+
+    let rewardLabels: string[] = [];
 
     setPlayers((prevPlayers) =>
       prevPlayers.map((p, idx) => {
@@ -1207,11 +1498,13 @@ export default function EtherniaGame() {
 
           if (rewardItem) {
             updatedBasePlayer = addItemToInventory(updatedBasePlayer, rewardItem);
+            rewardLabels.push(rewardItem.name);
           } else {
             updatedBasePlayer = {
               ...updatedBasePlayer,
               gold: updatedBasePlayer.gold + 30,
             };
+            rewardLabels.push("30 or");
           }
         }
 
@@ -1259,10 +1552,26 @@ export default function EtherniaGame() {
       })
     );
 
-    endTurn();
+    openCombatResultModal({
+      kind: "victory",
+      title: currentNode?.eventType === "elite" ? "Élite vaincue" : "Victoire",
+      summary:
+        currentNode?.eventType === "elite"
+          ? "L'ennemi d'élite a été abattu."
+          : "Le combat se termine à votre avantage.",
+      xp: xpGained,
+      rewards: rewardLabels,
+      players: recapPlayers,
+      xpStates,
+      onCloseAction: () => {
+        endTurn();
+      },
+    });
   };
 
   const handleDefeatCombat = (results: CombatResultPlayer[]) => {
+    const recapPlayers = buildCombatRecapPlayers(results);
+
     setCombatEnemy(null);
     setPendingNodeInteraction(null);
     setCombatParticipants([]);
@@ -1289,14 +1598,20 @@ export default function EtherniaGame() {
       })
     );
 
-    setPhase("MOVE");
-
-    setTimeout(() => {
-      endTurn();
-    }, 50);
+    openCombatResultModal({
+      kind: "defeat",
+      title: "Défaite",
+      summary: "Le groupe a été brisé par l'ennemi.",
+      players: recapPlayers,
+      onCloseAction: () => {
+        setGameOver(true);
+      },
+    });
   };
 
   const handleFleeCombat = (results: CombatResultPlayer[]) => {
+    const recapPlayers = buildCombatRecapPlayers(results);
+
     setCombatEnemy(null);
     setPendingNodeInteraction(null);
     setCombatParticipants([]);
@@ -1319,27 +1634,35 @@ export default function EtherniaGame() {
       })
     );
 
-    endTurn();
+    openCombatResultModal({
+      kind: "flee",
+      title: "Retraite",
+      summary: "Le groupe quitte le combat et bat en retraite.",
+      players: recapPlayers,
+      onCloseAction: () => {
+        endTurn();
+      },
+    });
   };
 
-  const getStartingPassives = (classType: ClassType) => {
-    switch (classType) {
-      case "Guerrier":
-        return [PLAYER_PASSIVES.iron_skin()];
-      case "Mage":
-        return [PLAYER_PASSIVES.mana_surge()];
-      case "Archer":
-        return [PLAYER_PASSIVES.eagle_eye()];
-      case "Voleur":
-        return [PLAYER_PASSIVES.toxic_blade()];
-      case "Invocateur":
-        return [PLAYER_PASSIVES.soul_feast()];
-      case "Clerc":
-        return [PLAYER_PASSIVES.divine_reserve()];
-      default:
-        return [];
-    }
-  };
+    const getStartingPassives = (classType: ClassType) => {
+      switch (classType) {
+        case "Guerrier":
+          return [PLAYER_PASSIVES.iron_skin()];
+        case "Mage":
+          return [PLAYER_PASSIVES.mana_surge()];
+        case "Archer":
+          return [PLAYER_PASSIVES.eagle_eye()];
+        case "Voleur":
+          return [PLAYER_PASSIVES.toxic_blade()];
+        case "Demoniste":
+          return [PLAYER_PASSIVES.soul_feast()];
+        case "Clerc":
+          return [PLAYER_PASSIVES.divine_reserve()];
+        default:
+          return [];
+      }
+    };
 
   const addPlayer = () => {
     if (!playerName.trim() || players.length >= 5) return;
@@ -1687,6 +2010,18 @@ export default function EtherniaGame() {
                 }
               }}
               onChoice={handleEventChoice}
+            />
+            <CombatResultModal
+              open={combatResultModal.open}
+              kind={combatResultModal.kind}
+              title={combatResultModal.title}
+              summary={combatResultModal.summary}
+              xp={combatResultModal.xp}
+              gold={combatResultModal.gold}
+              rewards={combatResultModal.rewards}
+              players={combatResultModal.players}
+              xpStates={combatResultModal.xpStates}
+              onClose={closeCombatResultModal}
             />
             {combatEnemy && combatPlayers.length > 0 && (
               <CombatOverlay

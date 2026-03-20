@@ -85,22 +85,24 @@ export function getXpReward(enemy: Enemy, node: MapNode | undefined) {
   return 20;
 }
 
-export function getLevelUpStats(classType: ClassType) {
-  switch (classType) {
-    case "Guerrier":
-      return { hp: 18, mana: 4, strength: 3, magic: 1, defense: 3, speed:2};
-    case "Mage":
-      return { hp: 8, mana: 18, strength: 1, magic: 4, defense: 1, speed:1};
-    case "Archer":
-      return { hp: 12, mana: 8, strength: 6, magic: 1, defense: 1, speed:3};
-    case "Voleur":
-      return { hp: 12, mana: 6, strength: 7, magic: 1, defense: 2, speed:3 };
-    case "Invocateur":
-      return { hp: 12, mana: 14, strength: 2, magic: 3, defense: 1, speed:2 };
-    default:
-      return { hp: 10, mana: 5, strength: 2, magic: 1, defense: 1, speed:1 };
+  export function getLevelUpStats(classType: ClassType) {
+    switch (classType) {
+      case "Guerrier":
+        return { hp: 16, mana: 5, strength: 3, magic: 1, defense: 3, speed: 1 };
+      case "Mage":
+        return { hp: 7, mana: 12, strength: 1, magic: 5, defense: 1, speed: 1 };
+      case "Archer":
+        return { hp: 11, mana: 8, strength: 3, magic: 1, defense: 1, speed: 2 };
+      case "Voleur":
+        return { hp: 10, mana: 7, strength: 3, magic: 1, defense: 1, speed: 2 };
+      case "Demoniste":
+        return { hp: 11, mana: 13, strength: 1, magic: 3, defense: 1, speed: 1 };
+      case "Clerc":
+        return { hp: 13, mana: 11, strength: 1, magic: 3, defense: 2, speed: 1 };
+      default:
+        return { hp: 10, mana: 6, strength: 2, magic: 1, defense: 1, speed: 1 };
+    }
   }
-}
 
 export function applyXpAndLevelUp(
   player: Player,
@@ -148,6 +150,7 @@ export function applyXpAndLevelUp(
         strength: updatedPlayer.stats.strength + growth.strength,
         magic: updatedPlayer.stats.magic + growth.magic,
         defense: updatedPlayer.stats.defense + growth.defense,
+        speed: updatedPlayer.stats.speed + growth.speed,
       },
     };
 

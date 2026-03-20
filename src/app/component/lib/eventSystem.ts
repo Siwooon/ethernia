@@ -185,7 +185,7 @@ export function resolveNodeEvent(
               {
                 id: "rest_focus",
                 label: "Canaliser les énergies",
-                description: "Récupère du mana, mais peut vous marquer.",
+                description: "Beaucoup de mana, +1 Magie, mais la corruption progresse.",
                 style: "power",
               },
               {
@@ -240,7 +240,7 @@ export function resolveNodeEvent(
               {
                 id: "treasure_force",
                 label: "Forcer le coffre",
-                description: "Meilleure récompense, mais risque de piège ou mimique.",
+                description: "Très grosse récompense, mais mimique possible et corruption accrue.",
                 style: "danger",
               },
               {
@@ -288,13 +288,13 @@ export function resolveNodeEvent(
               {
                 id: "random_help",
                 label: "Intervenir",
-                description: "Vous tentez d'agir malgré le danger.",
+                description: "Option prudente mais douloureuse.",
                 style: "danger",
               },
               {
                 id: "random_search",
                 label: "Fouiller la zone",
-                description: "Peut révéler un gain caché.",
+                description: "Peut donner un boon d'équipe, mais nourrit la corruption.",
                 style: "power",
               },
               {
@@ -493,6 +493,12 @@ export function resolveNodeEvent(
                 style: "danger",
               },
               {
+                id: "shrine_revive",
+                label: "Rappeler une âme tombée",
+                description: "Ressuscite un allié mort, mais réduit vos PV max.",
+                style: "sacrifice",
+              },
+              {
                 id: "shrine_leave",
                 label: "Refuser",
                 description: "Vous évitez le pacte.",
@@ -512,6 +518,12 @@ export function resolveNodeEvent(
                 id: "shrine_offer",
                 label: "Faire une offrande",
                 description: "Coût modéré, bénédiction plus forte.",
+                style: "sacrifice",
+              },
+              {
+                id: "shrine_revive",
+                label: "Prier pour un allié tombé",
+                description: "Ressuscite un allié mort, mais réduit vos PV max.",
                 style: "sacrifice",
               },
               {

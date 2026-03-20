@@ -34,7 +34,6 @@ export default function LobbyScreen({
   startGame,
 }: Props) {
   const [particles, setParticles] = useState<MenuParticle[]>([]);
-
   useEffect(() => {
     const generatedParticles = Array.from({ length: 15 }, (_, i) => ({
       id: i,
@@ -47,7 +46,9 @@ export default function LobbyScreen({
 
     setParticles(generatedParticles);
   }, []);
-  return (
+  const selectedClassData = CLASSES[selectedClass];
+
+  return(
     <motion.div
       key="lobby"
       initial={{ opacity: 0, scale: 1.02 }}
@@ -86,7 +87,7 @@ export default function LobbyScreen({
           />
         ))}
       </div>
-      <div className="relative z-10 w-full max-w-5xl px-6">
+      <div className="relative z-10 w-full max-w-6xl px-6">
         <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-8 items-center">
           <motion.div
             initial={{ opacity: 0, x: -30 }}
@@ -203,18 +204,18 @@ export default function LobbyScreen({
               </p>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-3 mb-5">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_200px_140px] gap-3 mb-4 items-stretch">
               <input
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
                 placeholder="Nom du héros"
-                className="p-3 bg-[#1b0a3d]/90 text-white rounded-xl border border-purple-800 outline-none focus:border-violet-400 font-rpg text-lg flex-1 shadow-inner"
+                className="p-3 bg-[#1b0a3d]/90 text-white rounded-xl border border-purple-800 outline-none focus:border-violet-400 font-rpg text-lg shadow-inner"
               />
 
               <select
                 value={selectedClass}
                 onChange={(e) => setSelectedClass(e.target.value as ClassType)}
-                className="p-3 bg-[#1b0a3d]/90 text-violet-100 rounded-xl border border-purple-800 outline-none font-rpg text-lg md:min-w-[180px]"
+                className="p-3 bg-[#1b0a3d]/90 text-violet-100 rounded-xl border border-purple-800 outline-none font-rpg text-lg"
               >
                 {Object.keys(CLASSES).map((c) => (
                   <option key={c} value={c}>
@@ -225,11 +226,46 @@ export default function LobbyScreen({
 
               <button
                 onClick={addPlayer}
-                disabled={players.length >= 5}
+                disabled={players.length >= 4}
                 className="bg-violet-700 px-6 py-3 rounded-xl text-white font-bold hover:bg-violet-600 border border-violet-400 disabled:opacity-50 transition-all shadow-[0_0_18px_rgba(168,85,247,0.25)]"
               >
                 Ajouter
               </button>
+            </div>
+            <div className="rounded-2xl border border-violet-800 bg-[#1b0a3d]/70 p-4 mb-5">
+              <div className="flex items-start gap-3">
+                <img
+                  src={selectedClassData.portrait}
+                  alt={selectedClass}
+                  className="w-14 h-14 rounded-xl border border-violet-700 shrink-0"
+                />
+
+                <div className="min-w-0">
+                  <div className="text-lg font-bold text-violet-100">{selectedClass}</div>
+                  <div className="text-sm text-violet-300">
+                    {selectedClassData.role || "Rôle non défini"}
+                  </div>
+                </div>
+              </div>
+
+              <p className="mt-3 text-sm text-violet-100/85 leading-relaxed">
+                {selectedClassData.shortDescription || "Description non définie."}
+              </p>
+
+              <div className="mt-3 grid gap-2 text-xs">
+                <div className="text-violet-200">
+                  <span className="font-bold">Base :</span>{" "}
+                  {selectedClassData.baseSkillName || "—"}
+                </div>
+                <div className="text-violet-200">
+                  <span className="font-bold">Signature :</span>{" "}
+                  {selectedClassData.signatureSkillName || "—"}
+                </div>
+                <div className="text-violet-200">
+                  <span className="font-bold">Synergies :</span>{" "}
+                  {selectedClassData.synergyTags?.join(" • ") || "Aucune"}
+                </div>
+              </div>
             </div>
 
             <div className="mb-6">

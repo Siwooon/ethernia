@@ -351,6 +351,7 @@ export default function CharacterPanel({
                   <div>Défense : <span className="text-yellow-300 font-bold">+{equipmentBonuses.defense}</span></div>
                   <div>Vie max : <span className="text-green-400 font-bold">+{equipmentBonuses.maxHp}</span></div>
                   <div>Mana max : <span className="text-blue-400 font-bold">+{equipmentBonuses.maxMana}</span></div>
+                  
                 </div>
               </div>
 

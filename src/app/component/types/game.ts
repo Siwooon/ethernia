@@ -1,4 +1,4 @@
-export type ClassType = "Archer" | "Guerrier" | "Mage" | "Voleur" | "Invocateur" | "Clerc";
+export type ClassType = "Archer" | "Guerrier" | "Mage" | "Voleur" | "Demoniste" | "Clerc";
 export type NodeType = "start" | "boss" | "normal" | "step";
 export type EventType = "none" | "battle" | "rest" | "treasure" | "random" | "merchant_blacksmith" | "merchant_alchemist" | "merchant_mystic" | "scripted_shrine" | "statuette" | "boss" | "elite";
 export type LocationTheme = "forest" | "ruins" | "swamp" | "crypt" | "mountain" | "village" | "cathedral" | "cavern" | "ashlands";
@@ -12,9 +12,12 @@ export type GridNodeKind = "start" | "path" | "statuette" | "boss_prep" | "boss"
 export type NodeVisibility = "hidden" | "discovered" | "visited";
 export type EliteRewardCategory = "weapon" | "armor" | "relic" | "consumable" | "material" | "gold";
 export type EnemySourceTag = "normal" | "elite" | "statue_guardian" | "merchant_blacksmith_corrupted" | "merchant_alchemist_corrupted" | "merchant_mystic_corrupted" | "treasure_mimic" | "random_ambush";
-export type EventChoiceAction = "take_statue" | "purify_statue" | "absorb_statue" | "rest_sleep" | "rest_focus" | "rest_cleanse" | "treasure_open_safe" | "treasure_force" | "treasure_leave" | "shrine_bless" | "shrine_offer" | "shrine_leave" | "random_help" | "random_search" | "random_ignore" | "engage_battle" | "wait_for_party";
-export type EffectTrigger = "battle_start" | "turn_start" | "turn_end" | "before_attack" | "after_attack" | "on_hit" | "on_damaged" | "on_kill";
+export type EventChoiceAction = "take_statue" | "purify_statue" | "absorb_statue" | "rest_sleep" | "rest_focus" | "rest_cleanse" | "treasure_open_safe" | "treasure_force" | "treasure_leave" | "shrine_bless" | "shrine_offer" | "shrine_revive" | "shrine_leave" | "random_help" | "random_search" | "random_ignore" | "engage_battle" | "wait_for_party";
+
+  export type EffectTrigger = "battle_start" | "turn_start" | "turn_end" | "before_attack" | "after_attack" | "on_hit" | "on_damaged" | "on_kill";
 export type TraitCategory = "passive" | "blessing" | "curse";
+
+
 
 export type TraitTrigger ="stats" | "battle_start" | "turn_start" | "turn_end" | "before_attack" | "after_attack" | "on_hit" | "on_damaged" | "on_kill";
 
@@ -320,6 +323,12 @@ export interface ClassData {
   image: string;
   portrait: string;
   stats: Stats;
+
+  role: string;
+  baseSkillName: string;
+  signatureSkillName: string;
+  shortDescription: string;
+  synergyTags: string[];
 }
 
 export interface ClassAbility {

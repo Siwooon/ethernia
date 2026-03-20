@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { getUnlockedSkills } from "@/app/component/data/abilities";
 import {
   Enemy,
@@ -59,6 +59,21 @@ type Props = {
   onFlee: (results: CombatResultPlayer[]) => void;
 };
 
+type SynergyWindow = {
+  sourcePlayerId: number;
+  statusType: StatusEffect["type"];
+  sourceLabel: string;
+};
+
+const SYNERGY_STATUS_TYPES: StatusEffect["type"][] = [
+  "burn",
+  "poison",
+  "frailty",
+  "vulnerability",
+  "silence",
+  "weakness",
+];
+
 export default function CombatOverlay({
   players,
   enemy,
@@ -100,10 +115,109 @@ export default function CombatOverlay({
   const displayRound = actionCount + 1;
   const [turnState, setTurnState] = useState<"waiting" | "animating">("waiting");
   const [shake, setShake] = useState<"player" | "enemy" | null>(null);
+  const [synergyWindow, setSynergyWindow] = useState<SynergyWindow | null>(null);
 
   const alliesRef = useRef(allies);
   const eStatsRef = useRef(eStats);
   const enemyStatusesRef = useRef(enemyStatuses);
+
+  const [enemyAttackBanner, setEnemyAttackBanner] = useState<{
+    name: string;
+    description?: string;
+    kind: "physical" | "magical" | "hybrid";
+  } | null>(null);
+
+  const getClassFallbackIcon = (classType: Player["classType"]) => {
+    switch (classType) {
+      case "Guerrier":
+        return "🛡️";
+      case "Mage":
+        return "✨";
+      case "Archer":
+        return "🏹";
+      case "Voleur":
+        return "🗡️";
+      case "Demoniste":
+        return "🔮";
+      case "Clerc":
+        return "✝️";
+      default:
+        return "🧙";
+    }
+  };
+
+  const statusLabelMap: Record<StatusEffect["type"], string> = {
+    poison: "☠️ Poison",
+    burn: "🔥 Brûlure",
+    shield: "🛡️ Bouclier",
+    regen: "✨ Régénération",
+    weakness: "🪓 Faiblesse",
+    frailty: "🩹 Fragilité",
+    silence: "🔇 Silence",
+    vulnerability: "🎯 Vulnérable",
+  };
+
+  const statusToneMap: Record<
+    StatusEffect["type"],
+    { bg: string; border: string; text: string }
+  > = {
+    poison: {
+      bg: "bg-lime-950/40",
+      border: "border-lime-700",
+      text: "text-lime-200",
+    },
+    burn: {
+      bg: "bg-red-950/40",
+      border: "border-red-700",
+      text: "text-red-200",
+    },
+    shield: {
+      bg: "bg-sky-950/40",
+      border: "border-sky-700",
+      text: "text-sky-200",
+    },
+    regen: {
+      bg: "bg-emerald-950/40",
+      border: "border-emerald-700",
+      text: "text-emerald-200",
+    },
+    weakness: {
+      bg: "bg-orange-950/40",
+      border: "border-orange-700",
+      text: "text-orange-200",
+    },
+    frailty: {
+      bg: "bg-amber-950/40",
+      border: "border-amber-700",
+      text: "text-amber-200",
+    },
+    silence: {
+      bg: "bg-violet-950/40",
+      border: "border-violet-700",
+      text: "text-violet-200",
+    },
+    vulnerability: {
+      bg: "bg-fuchsia-950/40",
+      border: "border-fuchsia-700",
+      text: "text-fuchsia-200",
+    },
+  };
+
+  const formatStatuses = (statuses: StatusEffect[]) => {
+    return statuses.map((status, index) => ({
+      key: `${status.type}-${status.source ?? "unknown"}-${index}`,
+      label: statusLabelMap[status.type] ?? status.type,
+      value: status.value,
+      duration: status.duration,
+      tone:
+        statusToneMap[status.type] ?? {
+          bg: "bg-slate-950/40",
+          border: "border-slate-700",
+          text: "text-slate-200",
+        },
+    }));
+  };
+
 
   useEffect(() => {
     alliesRef.current = allies;
@@ -116,6 +230,25 @@ export default function CombatOverlay({
   useEffect(() => {
     enemyStatusesRef.current = enemyStatuses;
   }, [enemyStatuses]);
+
+  useEffect(() => {
+    if (!combatStillActive()) return;
+
+    if (allies.every((a) => a.isDead)) {
+      onDefeat(
+        allies.map((ally) => ({
+          playerId: ally.playerId,
+          stats: ally.stats,
+          statuses: ally.statuses,
+          isDead: ally.isDead,
+        }))
+      );
+    }
+  }, [allies, eStats]);
+
+  function combatStillActive() {
+    return eStats.hp > 0;
+  }
 
   const addLog = (msg: string) => setLogs((prev) => [msg, ...prev]);
 
@@ -194,22 +327,38 @@ export default function CombatOverlay({
     setTurnState("waiting");
   };
 
-  const checkCombatEnd = () => {
-    const livingAllies = alliesRef.current.filter((a) => !a.isDead);
+  const checkCombatEnd = (
+    nextAllies: CombatPlayerState[] = alliesRef.current,
+    nextEnemy: Enemy = eStatsRef.current
+  ) => {
+    const livingAllies = nextAllies.filter((a) => !a.isDead);
 
-    if (eStatsRef.current.hp <= 0) {
-      onWin(buildCombatResults());
+    if (nextEnemy.hp <= 0) {
+      onWin(
+        nextAllies.map((ally) => ({
+          playerId: ally.playerId,
+          stats: ally.stats,
+          statuses: ally.statuses,
+          isDead: ally.isDead,
+        }))
+      );
       return true;
     }
 
     if (livingAllies.length === 0) {
-      onDefeat(buildCombatResults());
+      onDefeat(
+        nextAllies.map((ally) => ({
+          playerId: ally.playerId,
+          stats: ally.stats,
+          statuses: ally.statuses,
+          isDead: ally.isDead,
+        }))
+      );
       return true;
-    }
+  }
 
-    return false;
-  };
-
+  return false;
+};
   const applyPassiveTriggerForAlly = (
     ally: CombatPlayerState,
     trigger: "combat_start" | "turn_start" | "after_attack" | "after_take_damage",
@@ -293,15 +442,81 @@ export default function CombatOverlay({
   const selectedSkill =
     unlockedSkills.find((skill) => skill.id === selectedSkillId) || unlockedSkills[0];
 
-  const statusLabelMap: Record<StatusEffect["type"], string> = {
-    poison: "☠️ Poison",
-    burn: "🔥 Brûlure",
-    shield: "🛡️ Bouclier",
-    regen: "✨ Régénération",
-    weakness: "🪓 Faiblesse",
-    frailty: "🩹 Fragilité",
-    silence: "🔇 Silence",
-    vulnerability: "🎯 Vulnérable",
+  const consumeStatusForSynergy = (
+    statuses: StatusEffect[],
+    type: StatusEffect["type"]
+  ) => {
+    let consumed = false;
+
+    const next = statuses
+      .map((status, idx) => {
+        if (!consumed && idx >= 0 && status.type === type) {
+          consumed = true;
+          return {
+            ...status,
+            duration: status.duration - 1,
+          };
+        }
+
+        return status;
+      })
+      .filter((status) => status.duration > 0);
+
+    return { statuses: next, consumed };
+  };
+
+  const resolveTeamSynergy = (
+    actingPlayerId: number,
+    currentEnemyStatuses: StatusEffect[],
+    currentDamage: number,
+    actingStats: Stats
+  ) => {
+    if (!synergyWindow || synergyWindow.sourcePlayerId === actingPlayerId) {
+      return {
+        damage: currentDamage,
+        enemyStatuses: currentEnemyStatuses,
+        manaGain: 0,
+        log: null as string | null,
+      };
+    }
+
+    const matchingStatus = currentEnemyStatuses.find(
+      (status) => status.type === synergyWindow.statusType
+    );
+
+    if (!matchingStatus) {
+      return {
+        damage: currentDamage,
+        enemyStatuses: currentEnemyStatuses,
+        manaGain: 0,
+        log: null as string | null,
+      };
+    }
+
+    const bonusDamage = Math.max(
+      6,
+      Math.floor((actingStats.strength + actingStats.magic) * 0.2)
+    );
+    const consumedStatus = consumeStatusForSynergy(
+      currentEnemyStatuses,
+      synergyWindow.statusType
+    );
+
+    if (!consumedStatus.consumed) {
+      return {
+        damage: currentDamage,
+        enemyStatuses: currentEnemyStatuses,
+        manaGain: 0,
+        log: null as string | null,
+      };
+    }
+
+    return {
+      damage: currentDamage + bonusDamage,
+      enemyStatuses: consumedStatus.statuses,
+      manaGain: 4,
+      log: `🤝 Synergie d'équipe : ${statusLabelMap[synergyWindow.statusType]} est consommé, +${bonusDamage} dégâts et +4 mana.`,
+    };
   };
 
   const computeEnemyDamage = (
@@ -413,6 +628,7 @@ export default function CombatOverlay({
   const doEnemyTurn = () => {
     if (turnState === "animating") return;
     setTurnState("animating");
+    setSynergyWindow(null);
 
     const enemyStatusResult = applyTurnStatusEffectsToStats({
       hp: eStatsRef.current.hp,
@@ -448,6 +664,13 @@ export default function CombatOverlay({
 
     const attack = es.attacks[Math.floor(Math.random() * es.attacks.length)] || es.attacks[0];
 
+    setEnemyAttackBanner({
+      name: attack.name,
+      description: attack.description,
+      kind: attack.kind,
+    });
+    triggerShake("enemy");
+
     const { damage, crit } = computeEnemyDamage(
       attack,
       es,
@@ -480,6 +703,7 @@ export default function CombatOverlay({
     nextStats = terrainTurnResult.stats;
     terrainTurnResult.logs.forEach((log) =>
       addLog(`🌫️ ${target.player.name} — ${log}`)
+    
     );
 
     const passiveResult = applyPassiveTriggerForAlly(
@@ -528,12 +752,28 @@ export default function CombatOverlay({
         crit ? " 💥 CRITIQUE !" : ""
       }${attack.manaBurn ? ` -${attack.manaBurn} Mana` : ""}`
     );
+    setTimeout(() => {
+      setEnemyAttackBanner(null);
+    }, 900);
 
     if (checkCombatEnd()) return;
 
     setTimeout(() => {
       goToNextTurn();
     }, 900);
+  };
+
+  const getEnemyAttackBannerIcon = (kind: "physical" | "magical" | "hybrid") => {
+    switch (kind) {
+      case "physical":
+        return "⚔️";
+      case "magical":
+        return "✨";
+      case "hybrid":
+        return "☄️";
+      default:
+        return "👹";
+    }
   };
 
   const handleAction = (action: "attack" | "special" | "defend" | "flee") => {
@@ -571,6 +811,17 @@ export default function CombatOverlay({
       speed: modifiedPlayerStats.speed,
     };
 
+    const nextAlliesAfterSelfUpdate = alliesRef.current.map((ally) =>
+      ally.playerId === actingAlly.playerId
+        ? {
+            ...ally,
+            stats: currentStats,
+            statuses: currentStatuses,
+            isDead: currentStats.hp <= 0,
+          }
+        : ally
+    );
+
     updateAlly(actingAlly.playerId, (prev) => ({
       ...prev,
       stats: currentStats,
@@ -579,7 +830,7 @@ export default function CombatOverlay({
     }));
 
     if (currentStats.hp <= 0) {
-      if (checkCombatEnd()) return;
+      if (checkCombatEnd(nextAlliesAfterSelfUpdate, eStatsRef.current)) return;
       goToNextTurn();
       return;
     }
@@ -605,33 +856,35 @@ export default function CombatOverlay({
     setEStats(startTurnResult.enemyStats);
     setEnemyStatuses(startTurnResult.enemyStatuses);
 
-    if (action === "defend") {
-      const defendedStats: Stats = {
-        ...currentStats,
-        mana: Math.min(currentStats.maxMana, currentStats.mana + 5),
-      };
+if (action === "defend") {
+  const defendedStats: Stats = {
+    ...currentStats,
+    mana: Math.min(currentStats.maxMana, currentStats.mana + 6),
+    hp: Math.min(currentStats.maxHp, currentStats.hp + 3),
+  };
 
-      const defendedStatuses = addStatus(currentStatuses, {
-        type: "shield",
-        value: 1,
-        duration: 1,
-        source: "defend",
-      });
+  const defendedStatuses = addStatus(currentStatuses, {
+    type: "shield",
+    value: 2,
+    duration: 1,
+    source: "defend",
+  });
+  addLog(
+    `🛡️ ${actingAlly.player.name} se met en garde : +6 mana +3 PV +Bouclier.`
+  );
 
-      updateAlly(actingAlly.playerId, (prev) => ({
-        ...prev,
-        stats: defendedStats,
-        statuses: defendedStatuses,
-        defending: true,
-      }));
+  updateAlly(actingAlly.playerId, (prev) => ({
+    ...prev,
+    stats: defendedStats,
+    statuses: defendedStatuses,
+    defending: true,
+  }));
 
-      addLog(`🛡️ ${actingAlly.player.name} adopte une posture défensive ! +5 mana`);
-
-      setTimeout(() => {
-        if (!checkCombatEnd()) goToNextTurn();
-      }, 300);
-      return;
-    }
+  setTimeout(() => {
+    if (!checkCombatEnd()) goToNextTurn();
+  }, 300);
+  return;
+}
 
     if (action === "flee") {
       addLog(`🏃 ${actingAlly.player.name} fuit le combat !`);
@@ -705,11 +958,6 @@ export default function CombatOverlay({
       }`;
     }
 
-    const nextEnemyStats: Enemy = {
-      ...currentEnemyStats,
-      hp: Math.max(0, currentEnemyStats.hp - dmg),
-    };
-
     let nextPlayerStats: Stats =
       manaCost > 0
         ? { ...currentStats, mana: currentStats.mana - manaCost }
@@ -731,6 +979,15 @@ export default function CombatOverlay({
               source: selectedSkill.name,
             });
             addLog(`☠️ ${selectedSkill.name} applique ${effect.status}`);
+
+            if (SYNERGY_STATUS_TYPES.includes(effect.status)) {
+              setSynergyWindow({
+                sourcePlayerId: actingAlly.playerId,
+                statusType: effect.status,
+                sourceLabel: selectedSkill.name,
+              });
+              addLog(`🪄 Amorçage : ${selectedSkill.name} prépare une synergie sur ${statusLabelMap[effect.status]}.`);
+            }
           }
 
           if (chanceOk && effect.target === "player") {
@@ -759,6 +1016,31 @@ export default function CombatOverlay({
         }
       }
     }
+
+    const synergyResult = resolveTeamSynergy(
+      actingAlly.playerId,
+      updatedEnemyStatuses,
+      dmg,
+      nextPlayerStats
+    );
+
+    dmg = synergyResult.damage;
+    updatedEnemyStatuses = synergyResult.enemyStatuses;
+    if (synergyResult.manaGain > 0) {
+      nextPlayerStats = {
+        ...nextPlayerStats,
+        mana: Math.min(nextPlayerStats.maxMana, nextPlayerStats.mana + synergyResult.manaGain),
+      };
+      setSynergyWindow(null);
+    }
+    if (synergyResult.log) {
+      addLog(synergyResult.log);
+    }
+
+    const nextEnemyStats: Enemy = {
+      ...currentEnemyStats,
+      hp: Math.max(0, currentEnemyStats.hp - dmg),
+    };
 
     const afterAttackResult = applyPassiveTriggerForAlly(
       actingAlly,
@@ -813,240 +1095,377 @@ export default function CombatOverlay({
   const canUseSelectedSkill =
     !!selectedSkill && (displayedStats?.mana ?? 0) >= selectedSkill.manaCost;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm">
-      <div className="w-full max-w-7xl bg-[#1a0b2e] border-4 border-purple-900 rounded-xl overflow-hidden shadow-2xl flex flex-col">
-        <div className="px-6 py-3 border-b border-violet-900 bg-[#120720]">
-          <div className="flex items-center justify-between">
-            <div className="text-violet-200 font-bold">Round {displayRound}</div>
-            <div className="flex gap-2 flex-wrap">
-              {turnOrder.map((entry, idx) => {
-                const label =
-                  entry.kind === "enemy"
-                    ? eStats.name
-                    : allies.find((a) => a.playerId === entry.entityId)?.player.name ?? "Joueur";
+    const renderStatusBadges = (statuses: StatusEffect[]) => {
+  if (!statuses.length) {
+    return <div className="text-[11px] text-gray-500 italic">Aucun effet</div>;
+  }
 
-                return (
-                  <div
-                    key={entry.id}
-                    className={`px-3 py-1 rounded border text-xs ${
-                      idx === activeTurnIndex
-                        ? "bg-yellow-500/20 border-yellow-400 text-yellow-200"
-                        : "bg-black/50 border-violet-900 text-violet-200"
-                    }`}
-                  >
-                    {label}
-                  </div>
-                );
-              })}
+  return (
+    <div className="flex flex-wrap gap-1 mt-2">
+      {formatStatuses(statuses).map((status) => (
+        <div
+          key={status.key}
+          className={`px-2 py-1 rounded-full border text-[11px] ${status.tone.bg} ${status.tone.border} ${status.tone.text}`}
+          title={`${status.label} • valeur ${status.value} • ${status.duration} tour(s)`}
+        >
+          {status.label} · {status.value} · {status.duration}t
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const renderPlayerCard = (ally: CombatPlayerState) => {
+  const isActive =
+    activeTurn?.kind === "player" && activeTurn.entityId === ally.playerId;
+
+  return (
+    <div
+      key={ally.playerId}
+      className={`rounded-2xl border p-3 xl:p-4 transition-all ${
+        ally.isDead
+          ? "bg-red-950/20 border-red-900 opacity-60"
+          : isActive
+          ? "bg-violet-950/40 border-violet-400 shadow-[0_0_22px_rgba(168,85,247,0.35)] scale-[1.01]"
+          : "bg-[#1b0a3d]/75 border-violet-900"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 xl:w-12 xl:h-12 rounded-xl overflow-hidden border border-violet-700 bg-black/30 shrink-0 flex items-center justify-center">
+            {ally.player.portrait || ally.player.image ? (
+              <img
+                src={ally.player.portrait || ally.player.image}
+                alt={ally.player.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="text-xl">{getClassFallbackIcon(ally.player.classType)}</div>
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <div className="text-xs xl:text-sm font-bold text-violet-100 truncate">
+              {ally.player.name}
+            </div>
+            <div className="text-[11px] xl:text-xs text-violet-300">
+              {ally.player.classType}
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-[420px_1fr_300px] gap-4 p-4">
-          <div className="space-y-3">
-            <div className="text-sm font-bold text-violet-200">Équipe</div>
-            <div className="grid grid-cols-2 gap-3">
-              {allies.map((ally) => {
-                const isActive =
-                  activeTurn?.kind === "player" &&
-                  activeTurn.entityId === ally.playerId;
+        <div className="flex items-center gap-2">
+          {isActive && (
+            <span className="text-[10px] uppercase tracking-wider px-2 py-1 rounded-full border border-violet-400 bg-violet-500/20 text-violet-100">
+              À jouer
+            </span>
+          )}
+          {ally.defending && !ally.isDead && (
+            <span className="text-[10px] uppercase tracking-wider px-2 py-1 rounded-full border border-sky-500 bg-sky-500/20 text-sky-100">
+              Garde
+            </span>
+          )}
+          {ally.isDead && (
+            <span className="text-[10px] uppercase tracking-wider px-2 py-1 rounded-full border border-red-500 bg-red-500/20 text-red-100">
+              Mort
+            </span>
+          )}
+        </div>
+      </div>
 
-                return (
-                  <motion.div
-                    key={ally.playerId}
-                    animate={shake === "player" && isActive ? { x: [-6, 6, -4, 4, 0] } : { x: 0 }}
-                    className={`rounded-lg border p-3 ${
-                      ally.isDead
-                        ? "border-red-800 opacity-50 bg-red-950/20"
-                        : isActive
-                        ? "border-yellow-400 bg-yellow-500/10 shadow-[0_0_16px_rgba(250,204,21,0.18)]"
-                        : "border-violet-800 bg-black/40"
-                    }`}
-                  >
-                    <img
-                      src={ally.player.image}
-                      alt={ally.player.name}
-                      className="w-16 h-16 rounded-full object-cover mx-auto border-2 border-violet-500"
-                    />
-                    <div className="mt-2 text-center text-sm font-bold text-white">
-                      {ally.player.name}
-                    </div>
-                    <div className="text-center text-xs text-violet-300">
-                      {ally.player.classType}
-                    </div>
-
-                    <div className="mt-2 text-xs text-green-300">
-                      HP {ally.stats.hp}/{ally.stats.maxHp}
-                    </div>
-                    <div className="text-xs text-blue-300">
-                      Mana {ally.stats.mana}/{ally.stats.maxMana}
-                    </div>
-
-                    {ally.defending && (
-                      <div className="mt-1 text-[11px] text-cyan-300 font-bold">
-                        🛡️ Défense
-                      </div>
-                    )}
-
-                    {ally.isDead && (
-                      <div className="mt-1 text-[11px] text-red-400 font-bold">KO</div>
-                    )}
-
-                    {ally.statuses.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {ally.statuses.map((status, idx) => (
-                          <div
-                            key={`${ally.playerId}-${status.type}-${idx}`}
-                            className="text-[10px] px-2 py-0.5 rounded bg-violet-950 border border-violet-700 text-violet-100"
-                          >
-                            {statusLabelMap[status.type]} ({status.duration})
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </motion.div>
-                );
-              })}
-            </div>
+      <div className="mt-3 space-y-2">
+        <div>
+          <div className="flex justify-between text-[11px] text-red-200 mb-1">
+            <span>PV</span>
+            <span>
+              {ally.stats.hp}/{ally.stats.maxHp}
+            </span>
           </div>
-
-          <div className="flex flex-col gap-4">
-            <div className="h-72 rounded-xl border border-violet-900 bg-gradient-to-b from-[#0c0422] to-[#1a0b2e] flex items-center justify-center">
-              <div className="text-6xl font-fantasy text-red-700 select-none">VS</div>
-            </div>
-
-            <div className="bg-[#0f0518] p-4 border border-purple-900 rounded-xl flex gap-4 min-h-[260px]">
-              <div className="flex-1 bg-black/60 p-3 rounded-lg border border-purple-900/60 overflow-y-auto font-mono text-sm h-52">
-                {logs.map((l, idx) => (
-                  <div key={`${l}-${idx}`} className={idx === 0 ? "text-white" : "text-gray-500"}>
-                    {l}
-                  </div>
-                ))}
-              </div>
-
-              <div className="w-80 flex flex-col gap-2">
-                <div className="bg-black/50 border border-violet-900 rounded-lg p-2">
-                  <div className="text-xs text-violet-300 mb-1 font-bold">
-                    Compétence sélectionnée
-                  </div>
-                  <select
-                    value={selectedSkill?.id || ""}
-                    onChange={(e) => setSelectedSkillId(e.target.value)}
-                    className="w-full p-2 rounded bg-[#1b0a3d] text-white border border-violet-700 text-sm"
-                    disabled={!activePlayer}
-                  >
-                    {unlockedSkills.map((skill) => (
-                      <option key={skill.id} value={skill.id}>
-                        {skill.icon} {skill.name} — {skill.manaCost} mana
-                      </option>
-                    ))}
-                  </select>
-                  {selectedSkill && (
-                    <div className="mt-2 text-xs text-gray-300">
-                      {selectedSkill.description}
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 content-center">
-                  {activeTurn?.kind === "player" ? (
-                    <>
-                      <button
-                        onClick={() => handleAction("attack")}
-                        className="bg-red-800 hover:bg-red-700 text-white py-2.5 rounded-lg border-2 border-red-500 text-sm font-bold"
-                      >
-                        ⚔️ ATTAQUER
-                      </button>
-
-                      <button
-                        onClick={() => handleAction("special")}
-                        disabled={!selectedSkill || !canUseSelectedSkill}
-                        className="bg-violet-800 hover:bg-violet-700 text-white py-2.5 rounded-lg border-2 border-violet-400 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {selectedSkill ? `${selectedSkill.icon} ${selectedSkill.name}` : "Sort"}
-                        {selectedSkill && (
-                          <span className="block text-xs text-blue-300">
-                            {selectedSkill.manaCost} mana
-                          </span>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() => handleAction("defend")}
-                        className="bg-cyan-900 hover:bg-cyan-800 text-white py-2.5 rounded-lg border-2 border-cyan-600 text-sm font-bold"
-                      >
-                        🛡️ DÉFENDRE
-                        <span className="block text-xs text-cyan-300">+5 mana</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleAction("flee")}
-                        className="bg-gray-800 hover:bg-gray-700 text-white py-2.5 rounded-lg border-2 border-gray-500 text-sm font-bold"
-                      >
-                        🏃 FUIR
-                      </button>
-                    </>
-                  ) : (
-                    <div className="col-span-2 flex items-center justify-center text-red-400 font-bold animate-pulse text-lg">
-                      👹 Tour de {eStats.name}...
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+          <div className="h-2 rounded bg-black/40 overflow-hidden">
+            <div
+              className="h-full"
+              style={{
+                width: `${ally.stats.maxHp > 0 ? (ally.stats.hp / ally.stats.maxHp) * 100 : 0}%`,
+                background:
+                  "linear-gradient(90deg, rgba(220,38,38,0.95) 0%, rgba(248,113,113,1) 100%)",
+              }}
+            />
           </div>
+        </div>
 
-          <div>
-            <div className="text-sm font-bold text-red-200 mb-3">Ennemi</div>
-            <motion.div
-              animate={shake === "enemy" ? { x: [-8, 8, -6, 6, 0] } : { x: 0 }}
-              transition={{ duration: 0.35 }}
-              className="text-center rounded-xl border border-red-900 bg-black/40 p-4"
-            >
-              <img
-                src={eStats.image}
-                alt={eStats.name}
-                className="w-28 h-28 object-cover rounded-full border-4 border-red-700 shadow-[0_0_24px_rgba(220,38,38,0.6)] mx-auto"
-              />
-              <div className="mt-3 text-sm font-fantasy text-red-100 font-bold">
-                {eStats.name}
-              </div>
-              <div className="text-xs text-red-400 uppercase">{eStats.archetype}</div>
-              <div className="text-[10px] text-gray-300 mt-1">
-                FOR {eStats.strength} • MAG {eStats.magic} • DEF {eStats.defense} • VIT {eStats.speed}
-              </div>
-
-              {eStats.passive && (
-                <div className="text-[10px] text-amber-300 mt-1">{eStats.passive}</div>
-              )}
-
-              <div className="mt-3 text-left text-xs text-red-300">
-                HP {eStats.hp}/{eStats.maxHp}
-              </div>
-              <div className="h-2 bg-gray-800 rounded overflow-hidden mt-1">
-                <div
-                  className="h-full bg-red-600 transition-all duration-300"
-                  style={{ width: `${Math.max(0, (eStats.hp / eStats.maxHp) * 100)}%` }}
-                />
-              </div>
-
-              {enemyStatuses.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1 justify-center">
-                  {enemyStatuses.map((status, idx) => (
-                    <div
-                      key={`${status.type}-${idx}`}
-                      className="text-[10px] px-2 py-0.5 rounded bg-red-950 border border-red-700 text-red-100"
-                    >
-                      {statusLabelMap[status.type]} ({status.duration})
-                    </div>
-                  ))}
-                </div>
-              )}
-            </motion.div>
+        <div>
+          <div className="flex justify-between text-[11px] text-blue-200 mb-1">
+            <span>Mana</span>
+            <span>
+              {ally.stats.mana}/{ally.stats.maxMana}
+            </span>
+          </div>
+          <div className="h-2 rounded bg-black/40 overflow-hidden">
+            <div
+              className="h-full"
+              style={{
+                width: `${ally.stats.maxMana > 0 ? (ally.stats.mana / ally.stats.maxMana) * 100 : 0}%`,
+                background:
+                  "linear-gradient(90deg, rgba(37,99,235,0.95) 0%, rgba(96,165,250,1) 100%)",
+              }}
+            />
           </div>
         </div>
       </div>
+
+      <div className="mt-3 grid grid-cols-4 gap-2 text-[11px] text-gray-300">
+        <div>FOR {ally.stats.strength}</div>
+        <div>MAG {ally.stats.magic}</div>
+        <div>DEF {ally.stats.defense}</div>
+        <div>VIT {ally.stats.speed}</div>
+      </div>
+
+      {renderStatusBadges(ally.statuses)}
+    </div>
+  );
+};
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center px-3 xl:px-4 py-3 xl:py-6 overflow-hidden">
+    <AnimatePresence>
+      {enemyAttackBanner && (
+        <motion.div
+          initial={{ opacity: 0, y: -20, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -10, scale: 0.98 }}
+          className="absolute top-4 xl:top-8 left-1/2 -translate-x-1/2 z-[120] pointer-events-none px-4 w-full flex justify-center"
+        >
+          <div className="rounded-2xl border border-red-500/70 bg-black/85 px-4 xl:px-6 py-3 xl:py-4 shadow-[0_0_25px_rgba(239,68,68,0.35)] w-full max-w-[420px] text-center">
+            <div className="text-xs uppercase tracking-[0.3em] text-red-300 mb-1">
+              Attaque ennemie
+            </div>
+            <div className="text-2xl font-fantasy text-red-100">
+              {getEnemyAttackBannerIcon(enemyAttackBanner.kind)} {enemyAttackBanner.name}
+            </div>
+            {enemyAttackBanner.description && (
+              <div className="text-sm text-red-200/85 mt-2">
+                {enemyAttackBanner.description}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-[min(96vw,1350px)] h-[min(92vh,860px)] rounded-3xl border border-violet-700 bg-[#12081d] shadow-[0_0_35px_rgba(88,28,135,0.35)] overflow-hidden flex flex-col"
+      >
+        <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-0 flex-1 min-h-0">
+          <div className="p-4 xl:p-5 border-b xl:border-b-0 xl:border-r border-violet-900/60 overflow-y-auto min-h-0">
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <div className="text-xs uppercase tracking-[0.25em] text-violet-400">
+                  Combat
+                </div>
+                <div className="text-3xl font-fantasy text-violet-100 mt-1">
+                  Round {displayRound}
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="text-xs text-gray-400">Tour actuel</div>
+                <div className="text-sm font-bold text-violet-100">
+                  {activeTurn?.kind === "player"
+                    ? allies.find((a) => a.playerId === activeTurn.entityId)?.player.name ?? "Allié"
+                    : eStats.name}
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`rounded-2xl border p-5 mb-5 ${
+                shake === "enemy"
+                  ? "border-red-500 bg-red-950/20"
+                  : "border-violet-800 bg-[#1b0a3d]/70"
+              }`}
+            >
+            <div className="flex items-start gap-4">
+              <div className="w-24 xl:w-28 shrink-0">
+                <div className="rounded-2xl border border-violet-700 bg-black/30 p-2 shadow-inner">
+                  <div className="aspect-square overflow-hidden rounded-xl bg-black/40 flex items-center justify-center">
+                    {eStats.image ? (
+                      <img
+                        src={eStats.image}
+                        alt={eStats.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="text-4xl">👹</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1">
+                <div className="text-xs uppercase tracking-[0.2em] text-red-300">
+                  Ennemi
+                </div>
+                <div className="text-xl xl:text-2xl font-bold text-violet-100 mt-1">
+                  {eStats.name}
+                </div>
+                <div className="text-xs xl:text-sm text-violet-300 mt-1">
+                  {eStats.archetype}
+                </div>
+
+                <div className="mt-4">
+                  <div className="flex justify-between text-[11px] text-red-200 mb-1">
+                    <span>PV</span>
+                    <span>
+                      {eStats.hp}/{eStats.maxHp}
+                    </span>
+                  </div>
+                  <div className="h-3 rounded bg-black/40 overflow-hidden">
+                    <div
+                      className="h-full"
+                      style={{
+                        width: `${eStats.maxHp > 0 ? (eStats.hp / eStats.maxHp) * 100 : 0}%`,
+                        background:
+                          "linear-gradient(90deg, rgba(220,38,38,0.95) 0%, rgba(248,113,113,1) 100%)",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {renderStatusBadges(enemyStatuses)}
+              </div>
+            </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+              {allies.map(renderPlayerCard)}
+            </div>
+          </div>
+
+          <div className="p-4 xl:p-5 flex flex-col gap-4 overflow-y-auto min-h-0">
+            <div className="rounded-2xl border border-violet-900 bg-[#1b0a3d]/70 p-4">
+              <div className="text-sm font-bold text-violet-200 mb-3">
+                Actions
+              </div>
+
+              {!activePlayer || activePlayer.isDead || activeTurn?.kind !== "player" ? (
+                <div className="text-sm text-gray-400 italic">
+                  En attente du tour d’un allié...
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => handleAction("attack")}
+                      disabled={turnState === "animating"}
+                      className="rounded-xl border border-violet-700 bg-violet-900/30 hover:bg-violet-800/40 px-3 py-2.5 text-left transition"
+                    >
+                      <div className="font-bold text-violet-100">⚔️ Attaquer</div>
+                      <div className="text-xs text-violet-300 mt-1">
+                        Attaque stable basée sur la Force.
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => handleAction("special")}
+                      disabled={turnState === "animating" || !selectedSkill}
+                      className="rounded-xl border border-fuchsia-700 bg-fuchsia-900/20 hover:bg-fuchsia-800/30 px-3 py-2.5 text-left transition"
+                    >
+                      <div className="font-bold text-fuchsia-100">
+                        ✨ Compétence
+                      </div>
+                      <div className="text-xs text-fuchsia-300 mt-1">
+                        {selectedSkill
+                          ? `${selectedSkill.name} • ${selectedSkill.manaCost} mana`
+                          : "Aucune compétence"}
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => handleAction("defend")}
+                      disabled={turnState === "animating"}
+                      className="rounded-xl border border-sky-700 bg-sky-900/20 hover:bg-sky-800/30 px-3 py-2.5 text-left transition"
+                    >
+                      <div className="font-bold text-sky-100">🛡️ Défendre</div>
+                      <div className="text-xs text-sky-300 mt-1">
+                        +6 mana, +3 PV, +Bouclier.
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => handleAction("flee")}
+                      disabled={turnState === "animating"}
+                      className="rounded-xl border border-amber-700 bg-amber-900/20 hover:bg-amber-800/30 px-3 py-2.5 text-left transition"
+                    >
+                      <div className="font-bold text-amber-100">🏃 Fuir</div>
+                      <div className="text-xs text-amber-300 mt-1">
+                        Quitte immédiatement le combat.
+                      </div>
+                    </button>
+                  </div>
+
+                  {unlockedSkills.length > 0 && (
+                    <div className="mt-4">
+                      <div className="text-xs uppercase tracking-[0.18em] text-violet-400 mb-2">
+                        Compétences disponibles
+                      </div>
+                      <div className="space-y-2 max-h-[220px] xl:max-h-[260px] overflow-auto pr-1">
+                        {unlockedSkills.map((skill) => {
+                          const selected = selectedSkill?.id === skill.id;
+                          const affordable = activePlayer.stats.mana >= skill.manaCost;
+
+                          return (
+                            <button
+                              key={skill.id}
+                              onClick={() => setSelectedSkillId(skill.id)}
+                              className={`w-full text-left rounded-xl border px-3 py-3 transition ${
+                                selected
+                                  ? "border-fuchsia-400 bg-fuchsia-500/10"
+                                  : "border-violet-900 bg-black/20 hover:bg-violet-900/20"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="font-bold text-sm text-violet-100">
+                                  {skill.icon} {skill.name}
+                                </div>
+                                <div
+                                  className={`text-xs font-bold ${
+                                    affordable ? "text-blue-300" : "text-red-300"
+                                  }`}
+                                >
+                                  {skill.manaCost} mana
+                                </div>
+                              </div>
+                              <div className="text-xs text-gray-300 mt-1">
+                                {skill.description}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-violet-900 bg-[#1b0a3d]/70 p-4 flex-1 min-h-[180px] xl:min-h-[220px]">
+              <div className="text-sm font-bold text-violet-200 mb-3">
+                Journal du combat
+              </div>
+              <div className="space-y-2 max-h-[220px] xl:max-h-[340px] overflow-auto pr-1 text-sm">
+                {logs.slice(0, 10).map((log, index) => (
+                  <div
+                    key={`${log}-${index}`}
+                    className="rounded-lg border border-violet-900/60 bg-black/20 px-3 py-2 text-violet-100"
+                  >
+                    {log}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 }

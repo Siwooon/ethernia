@@ -20,61 +20,59 @@ type PassiveResult = {
 };
 
 export const PLAYER_PASSIVES = {
-
   iron_skin: (): PassiveEffect => ({
     id: "iron_skin",
-    name: "Peau de fer",
+    name: "Mur vivant",
     description: "Quand vous subissez des dégâts, gagnez 1 Bouclier pour 1 tour.",
     trigger: "after_take_damage",
     owner: "player",
     value: 1,
   }),
 
-  battle_rage: (): PassiveEffect => ({
-    id: "battle_rage",
-    name: "Rage de bataille",
-    description: "Au début du combat, si vos PV sont sous 50%, gagnez +3 Force.",
-    trigger: "combat_start",
+  mana_surge: (): PassiveEffect => ({
+    id: "mana_surge",
+    name: "Braise intérieure",
+    description: "Au début de chaque tour, récupère 4 mana. Si la cible brûle, vos attaques gagnent 2 dégâts bonus.",
+    trigger: "turn_start",
     owner: "player",
-    value: 3,
+    value: 4,
   }),
 
-  armor_breaker: (): PassiveEffect => ({
-    id: "armor_breaker",
-    name: "Briseur d’armure",
-    description: "Après une attaque, si la cible est Fragile, inflige 3 dégâts bonus.",
+  eagle_eye: (): PassiveEffect => ({
+    id: "eagle_eye",
+    name: "Œil du chasseur",
+    description: "Après une attaque sur une cible Vulnérable, inflige 3 dégâts bonus.",
     trigger: "after_attack",
     owner: "player",
     value: 3,
   }),
 
-  unyielding: (): PassiveEffect => ({
-    id: "unyielding",
-    name: "Inébranlable",
-    description: "Au début de chaque tour, si vous avez un Bouclier, gagnez +2 Défense temporaire.",
-    trigger: "turn_start",
+  toxic_blade: (): PassiveEffect => ({
+    id: "toxic_blade",
+    name: "Lame venimeuse",
+    description: "Après une attaque, si la cible est empoisonnée, inflige 4 dégâts bonus.",
+    trigger: "after_attack",
+    owner: "player",
+    value: 4,
+  }),
+
+  soul_feast: (): PassiveEffect => ({
+    id: "soul_feast",
+    name: "Faim des âmes",
+    description: "Au début du combat, gagnez +2 Magie. Après une attaque, récupérez 2 mana.",
+    trigger: "combat_start",
     owner: "player",
     value: 2,
   }),
 
-  mana_surge: (): PassiveEffect => ({
-    id: "mana_surge",
-    name: "Surcharge arcanique",
-    description: "Au début de chaque tour, récupère 4 mana.",
-    trigger: "turn_start",
+  divine_reserve: (): PassiveEffect => ({
+    id: "divine_reserve",
+    name: "Réserve sacrée",
+    description: "Quand vous subissez des dégâts, récupérez 3 mana.",
+    trigger: "after_take_damage",
     owner: "player",
-    value: 4,
+    value: 3,
   }),
-
-  pyromancy: (): PassiveEffect => ({
-    id: "pyromancy",
-    name: "Pyromancie",
-    description: "Après une attaque, si la cible brûle, inflige 4 dégâts bonus.",
-    trigger: "after_attack",
-    owner: "player",
-    value: 4,
-  }),
-
   arcane_focus: (): PassiveEffect => ({
     id: "arcane_focus",
     name: "Focalisation arcanique",
@@ -93,28 +91,10 @@ export const PLAYER_PASSIVES = {
     value: 3,
   }),
 
-  eagle_eye: (): PassiveEffect => ({
-    id: "eagle_eye",
-    name: "Œil d’aigle",
-    description: "Après une attaque, si la cible est Vulnérable, inflige 3 dégâts bonus.",
-    trigger: "after_attack",
-    owner: "player",
-    value: 3,
-  }),
-
   hunter_instinct: (): PassiveEffect => ({
     id: "hunter_instinct",
     name: "Instinct du chasseur",
     description: "Après une attaque, si la cible est sous 50% PV, inflige 4 dégâts bonus.",
-    trigger: "after_attack",
-    owner: "player",
-    value: 4,
-  }),
-
-  toxic_blade: (): PassiveEffect => ({
-    id: "toxic_blade",
-    name: "Lame toxique",
-    description: "Après une attaque, applique Poison.",
     trigger: "after_attack",
     owner: "player",
     value: 4,
@@ -138,15 +118,6 @@ export const PLAYER_PASSIVES = {
     value: 4,
   }),
 
-  soul_feast: (): PassiveEffect => ({
-    id: "soul_feast",
-    name: "Festin d’âmes",
-    description: "Après une attaque, récupère 2 PV.",
-    trigger: "after_attack",
-    owner: "player",
-    value: 2,
-  }),
-
   withering_presence: (): PassiveEffect => ({
     id: "withering_presence",
     name: "Présence flétrissante",
@@ -163,15 +134,6 @@ export const PLAYER_PASSIVES = {
     trigger: "after_attack",
     owner: "player",
     value: 4,
-  }),
-
-  divine_reserve: (): PassiveEffect => ({
-    id: "divine_reserve",
-    name: "Réserve divine",
-    description: "Au début de chaque tour, récupère 3 PV.",
-    trigger: "turn_start",
-    owner: "player",
-    value: 3,
   }),
 
   holy_guard: (): PassiveEffect => ({
