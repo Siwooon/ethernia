@@ -440,7 +440,7 @@ export default function CombatResultModal({
                 : tone.button
             }`}
           >
-            {hasRunningAnimation ? "Animation en cours..." : "Continuer"}
+            {hasRunningAnimation ? "..." : "Continuer"}
           </button>
         </div>
 

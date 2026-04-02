@@ -12,7 +12,7 @@ export const FLOORS: FloorDefinition[] = [
   {
     floor: 1,
     label: "Les terres sauvages",
-    biomePool: ["forest", "ruins", "cavern"],
+    biomePool: ["forest", "ruins", "crypt"],
     corruptionRate: 2,
   },
   {

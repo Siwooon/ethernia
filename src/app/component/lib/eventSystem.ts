@@ -1,6 +1,6 @@
 import { BASE_ITEMS, EQUIPMENT_ITEMS } from "@/app/component/data/items";
 import { Enemy, EventChoiceAction, MapNode, Player } from "@/app/component/types/game";
-import { createEnemyFromNode, createSpecialEnemy } from "@/app/component/lib/enemies";
+import { createEnemyFromNode, createSpecialEnemy, createEnemyGroupFromNode, } from "@/app/component/lib/enemies";
 import { addItemToInventory } from "@/app/component/lib/inventory";
 import { buffPlayerStats, healPlayerWithEquipment, getBossModifiersFromStatues } from "@/app/component/lib/gameProgression";
 
@@ -18,6 +18,7 @@ export type EventResult =
   | {
       type: "combat";
       enemy: Enemy;
+      enemies?: Enemy[];
       message?: { title: string; text: string };
     }
   | {
@@ -116,21 +117,34 @@ export function resolveNodeEvent(
     };
   }
 
-  if (node.eventType === "battle") {
-    const baseEnemy = createEnemyFromNode(node);
-    const boostedEnemy = applyCorruptionToEnemy(baseEnemy);
+if (node.eventType === "battle") {
+  const group = createEnemyGroupFromNode(node).map((enemy) =>
+    applyCorruptionToEnemy(enemy)
+  );
 
-    return {
-      type: "combat",
-      enemy: boostedEnemy,
-      message: corrupted
-        ? {
-            title: "Combat corrompu",
-            text: "L’ennemi est renforcé par les ténèbres.",
-          }
-        : undefined,
-    };
-  }
+  const leadEnemy = group[0];
+
+  return {
+    type: "combat",
+    enemy: leadEnemy,
+    enemies: group,
+    message: corrupted
+      ? {
+          title: group.length > 1 ? "Embuscade corrompue" : "Combat corrompu",
+          text:
+            group.length > 1
+              ? "Plusieurs ennemis renforcés par les ténèbres vous encerclent."
+              : "L’ennemi est renforcé par les ténèbres.",
+        }
+      : {
+          title: group.length > 1 ? "Embuscade" : "Combat",
+          text:
+            group.length > 1
+              ? "Plusieurs ennemis surgissent devant vous."
+              : "Un ennemi bloque votre route.",
+        },
+  };
+}
 
   if (node.eventType === "elite") {
     const baseEnemy = createSpecialEnemy(node, "elite");

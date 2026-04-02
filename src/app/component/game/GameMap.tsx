@@ -25,7 +25,7 @@ type Props = {
 
 function getNodeDisplay(node: MapNode) {
   if (node.kind === "start") {
-    return { icon: "🟢", label: "Début", border: "border-lime-400", bg: "bg-lime-100/90 text-black" };
+    return { icon: "🟢", label: "Camp", border: "border-lime-400", bg: "bg-lime-100/90 text-black" };
   }
 
   if (node.kind === "statuette") {
@@ -38,10 +38,6 @@ function getNodeDisplay(node: MapNode) {
 
   if (node.kind === "boss") {
     return { icon: "👑", label: "Boss", border: "border-red-500", bg: "bg-red-100/90 text-black" };
-  }
-
-  if (node.kind === "stairs") {
-    return { icon: "⬇️", label: "Sortie", border: "border-gray-400", bg: "bg-gray-100/90 text-black" };
   }
 
   switch (node.eventType) {
@@ -174,8 +170,7 @@ export default function GameMap({
             node.kind === "start" ||
             node.kind === "statuette" ||
             node.kind === "boss_prep" ||
-            node.kind === "boss" ||
-            node.kind === "stairs";
+            node.kind === "boss"
 
           const sizeClass = isSpecial ? "w-16 h-16" : "w-14 h-14";
 

@@ -23,10 +23,10 @@ export const PLAYER_PASSIVES = {
   iron_skin: (): PassiveEffect => ({
     id: "iron_skin",
     name: "Mur vivant",
-    description: "Quand vous subissez des dégâts, gagnez 1 Bouclier pour 1 tour.",
+    description: "Quand vous subissez des dégâts, gagnez 5 Bouclier pour 2 tour.",
     trigger: "after_take_damage",
     owner: "player",
-    value: 1,
+    value: 5,
   }),
 
   mana_surge: (): PassiveEffect => ({
@@ -36,15 +36,6 @@ export const PLAYER_PASSIVES = {
     trigger: "turn_start",
     owner: "player",
     value: 4,
-  }),
-
-  eagle_eye: (): PassiveEffect => ({
-    id: "eagle_eye",
-    name: "Œil du chasseur",
-    description: "Après une attaque sur une cible Vulnérable, inflige 3 dégâts bonus.",
-    trigger: "after_attack",
-    owner: "player",
-    value: 3,
   }),
 
   toxic_blade: (): PassiveEffect => ({
@@ -91,33 +82,6 @@ export const PLAYER_PASSIVES = {
     value: 3,
   }),
 
-  hunter_instinct: (): PassiveEffect => ({
-    id: "hunter_instinct",
-    name: "Instinct du chasseur",
-    description: "Après une attaque, si la cible est sous 50% PV, inflige 4 dégâts bonus.",
-    trigger: "after_attack",
-    owner: "player",
-    value: 4,
-  }),
-
-  assassin_instinct: (): PassiveEffect => ({
-    id: "assassin_instinct",
-    name: "Instinct d’assassin",
-    description: "Après une attaque, si la cible est empoisonnée, inflige 4 dégâts bonus.",
-    trigger: "after_attack",
-    owner: "player",
-    value: 4,
-  }),
-
-  executioner: (): PassiveEffect => ({
-    id: "executioner",
-    name: "Exécuteur",
-    description: "Après une attaque, si l’ennemi est sous 35% PV, inflige 4 dégâts bonus.",
-    trigger: "after_attack",
-    owner: "player",
-    value: 4,
-  }),
-
   withering_presence: (): PassiveEffect => ({
     id: "withering_presence",
     name: "Présence flétrissante",
@@ -143,15 +107,6 @@ export const PLAYER_PASSIVES = {
     trigger: "after_take_damage",
     owner: "player",
     value: 1,
-  }),
-
-  judicator: (): PassiveEffect => ({
-    id: "judicator",
-    name: "Juge sacré",
-    description: "Après une attaque, si la cible est affaiblie, inflige 4 dégâts bonus.",
-    trigger: "after_attack",
-    owner: "player",
-    value: 4,
   }),
 
   martyr_light: (): PassiveEffect => ({
@@ -219,24 +174,142 @@ export const PLAYER_PASSIVES = {
     })
 };
 
-export const ENEMY_PASSIVES = {
-  poison_aura: (): PassiveEffect => ({
+export const ENEMY_PASSIVES: Record<string, () => PassiveEffect> = {
+  poison_aura: () => ({
     id: "poison_aura",
     name: "Aura toxique",
-    description: "Le joueur perd 2 PV au début de chaque tour ennemi.",
+    description: "Inflige du poison léger au début du tour ennemi.",
     trigger: "turn_start",
     owner: "enemy",
     value: 2,
   }),
 
-  stone_hide: (): PassiveEffect => ({
+  stone_hide: () => ({
     id: "stone_hide",
     name: "Peau de pierre",
     description: "Réduit légèrement les dégâts subis.",
     trigger: "before_take_damage",
     owner: "enemy",
+    value: 3,
+  }),
+
+  brute_force: () => ({
+    id: "brute_force",
+    name: "Force brute",
+    description: "Les attaques de l’ennemi frappent plus fort.",
+    trigger: "before_attack",
+    owner: "enemy",
+    value: 4,
+  }),
+
+  quick_killer: () => ({
+    id: "quick_killer",
+    name: "Tueur rapide",
+    description: "Augmente la létalité contre les cibles affaiblies.",
+    trigger: "before_attack",
+    owner: "enemy",
+    value: 0.2,
+  }),
+
+  bulwark: () => ({
+    id: "bulwark",
+    name: "Rempart",
+    description: "Réduit les dégâts reçus tant que l’ennemi est encore solide.",
+    trigger: "before_take_damage",
+    owner: "enemy",
+    value: 5,
+  }),
+
+  arcane_hunger: () => ({
+    id: "arcane_hunger",
+    name: "Faim arcanique",
+    description: "Les attaques magiques brûlent une partie du mana adverse.",
+    trigger: "after_attack",
+    owner: "enemy",
+    value: 4,
+  }),
+
+  soul_drinker: () => ({
+    id: "soul_drinker",
+    name: "Buveur d’âmes",
+    description: "Récupère un peu de vie après avoir infligé des dégâts.",
+    trigger: "after_attack",
+    owner: "enemy",
+    value: 6,
+  }),
+
+    swamp_regen: () => ({
+    id: "swamp_regen",
+    name: "Régénération fangeuse",
+    description: "Récupère 5 PV au début de chaque tour.",
+    trigger: "turn_start",
+    owner: "enemy",
+    value: 5,
+  }),
+
+  ambush_strike: () => ({
+    id: "ambush_strike",
+    name: "Frappe embusquée",
+    description: "Au premier tour, inflige +6 dégâts.",
+    trigger: "combat_start",
+    owner: "enemy",
+    value: 6,
+  }),
+
+  toxic_blood: () => ({
+    id: "toxic_blood",
+    name: "Sang toxique",
+    description: "Quand touché, applique poison au joueur.",
+    trigger: "after_take_damage",
+    owner: "enemy",
+    value: 3,
+  }),
+
+  stone_core: () => ({
+    id: "stone_core",
+    name: "Cœur de pierre",
+    description: "Réduit les dégâts tant que PV > 50%.",
+    trigger: "before_take_damage",
+    owner: "enemy",
+    value: 6,
+  }),
+
+  burning_skin: () => ({
+    id: "burning_skin",
+    name: "Peau brûlante",
+    description: "Quand touché, inflige brûlure.",
+    trigger: "after_take_damage",
+    owner: "enemy",
+    value: 4,
+  }),
+
+  executioner_instinct: () => ({
+    id: "executioner_instinct",
+    name: "Instinct d'exécution",
+    description: "+20% dégâts sur cible < 50% PV.",
+    trigger: "before_attack",
+    owner: "enemy",
+    value: 0.2,
+  }),
+
+  soul_overflow: () => ({
+    id: "soul_overflow",
+    name: "Débordement d’âmes",
+    description: "Après une attaque, gagne 6 PV.",
+    trigger: "after_attack",
+    owner: "enemy",
+    value: 6,
+  }),
+
+  corruption_aura: () => ({
+    id: "corruption_aura",
+    name: "Aura de corruption",
+    description: "Applique Faiblesse au début du combat.",
+    trigger: "combat_start",
+    owner: "enemy",
     value: 2,
   }),
+  
 };
 
 export function runPassives(
@@ -302,7 +375,7 @@ export function runPassives(
       playerStatuses = addStatus(playerStatuses, {
         type: "shield",
         value: passive.value ?? 1,
-        duration: 1,
+        duration: 2,
         source: passive.id,
       });
       logs.push(`🛡️ ${passive.name} : Bouclier gagné`);

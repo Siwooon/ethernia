@@ -37,7 +37,7 @@ export function applyTerrainEffectsOnCombatStart(
     if (effect.type === "mana_spring") {
       statuses = addStatus(statuses, {
         type: "regen",
-        value: 0,
+        value: 4,
         duration: 3,
         source: "terrain_mana_spring",
       });

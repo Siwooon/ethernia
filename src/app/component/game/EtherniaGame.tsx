@@ -10,7 +10,6 @@ import LobbyScreen from "./LobbyScreen";
 import GameHUD from "./GameHUD";
 import GameMap from "./GameMap";
 import CombatResultModal from "./CombatResultModal";
-
 import { equipInventoryItem,unequipInventorySlot, consumeItem, addItemToInventory, buyItem, sellItem  } from "@/app/component/lib/inventory";
 import { FLOORS, FloorBiome } from "@/app/component/data/floors";
 import { PLAYER_PASSIVES } from "@/app/component/lib/passives";
@@ -25,14 +24,11 @@ import { CLASSES } from "@/app/component/data/classes";
 import { generateGridMap } from "@/app/component/lib/generateGridMap";
 import { resolveNodeEvent } from "@/app/component/lib/eventSystem";
 import { EventChoiceAction } from "@/app/component/types/game";
-import { createEnemyFromNode } from "@/app/component/lib/enemies";
+import { createEnemyFromNode, createEnemyGroupFromNode } from "@/app/component/lib/enemies";
+import { getPrimaryEnemy, syncCombatEnemyToEnemy } from "@/app/component/lib/combatEnemies";
 
 
-import {
-  applyXpAndLevelUp,
-  buffPlayerStats,
-  getXpReward,
-} from "@/app/component/lib/gameProgression";
+import { applyXpAndLevelUp, buffPlayerStats, getXpReward } from "@/app/component/lib/gameProgression";
 
 import { ClassType, Enemy, MapNode, Player, Stats, StatusEffect } from "@/app/component/types/game";
 import CombatOverlay, { CombatResultPlayer } from "@/app/component/game/CombatOverlay";
@@ -115,7 +111,7 @@ export default function EtherniaGame() {
   
   const [floorCorruptionTurn, setFloorCorruptionTurn] = useState(0);
 
-  const [combatEnemy, setCombatEnemy] = useState<Enemy | null>(null);
+  const [combatEnemies, setCombatEnemies] = useState<Enemy[]>([]);
   const [eventMessage, setEventMessage] = useState<{
     title: string;
     text: string;
@@ -603,14 +599,6 @@ export default function EtherniaGame() {
     const node = nodes.find((n) => n.id === nodeId);
     if (!node || !currentPlayer) return;
 
-    if (node.kind === "stairs") {
-      setEventMessage({
-        title: "Escalier",
-        text: "Vous avez trouvé la sortie de l'étage.",
-      });
-      endTurn();
-      return;
-    }
     // Si la case n'est plus activable, on passe juste le tour
     if (!canTriggerNodeEvent(node)) {
       setEventMessage({
@@ -639,7 +627,7 @@ export default function EtherniaGame() {
 
       if (result.type === "combat") {
         setCombatParticipants([currentPlayerIndex]);
-        setCombatEnemy(result.enemy);
+        setCombatEnemies(result.enemies && result.enemies.length > 0 ? result.enemies : [result.enemy]);
         setPhase("COMBAT");
         return;
       }
@@ -724,13 +712,16 @@ export default function EtherniaGame() {
 
         setCombatParticipants(participants);
 
-        const enemy = createEnemyFromNode(interactionNode);
+      const enemies =
+        interactionNode.eventType === "battle"
+          ? createEnemyGroupFromNode(interactionNode)
+          : [createEnemyFromNode(interactionNode)];
 
-        setEventMessage(null);
-        setPendingNodeInteraction(null);
-        setCombatEnemy(enemy);
-        setPhase("COMBAT");
-        return;
+      setEventMessage(null);
+      setPendingNodeInteraction(null);
+      setCombatEnemies(enemies);
+      setPhase("COMBAT");
+      return;
       }
       if (choiceId === "wait_for_party") {
         setCombatParticipants((prev) =>
@@ -779,7 +770,7 @@ export default function EtherniaGame() {
         setPendingEventNodeId(null);
         setPendingChoiceContext(null);
         setCombatParticipants([currentPlayerIndex]);
-        setCombatEnemy(eliteGuardian);
+        setCombatEnemies([eliteGuardian]);
         setPhase("COMBAT");
         return;
       }
@@ -997,12 +988,12 @@ export default function EtherniaGame() {
         setPendingChoiceContext(null);
         setEventMessage(null);
         setCombatParticipants([currentPlayerIndex]);
-        setCombatEnemy({
+        setCombatEnemies([{
           ...mimic,
           name: "☠️ Mimique corrompue",
           hp: Math.floor(mimic.hp * 1.3),
           maxHp: Math.floor(mimic.maxHp * 1.3),
-        });
+        }]);
         setPhase("COMBAT");
         return;
         }
@@ -1400,7 +1391,8 @@ export default function EtherniaGame() {
   
   const handleWinCombat = (results: CombatResultPlayer[]) => {
     const currentNode = nodes.find((n) => n.id === currentPlayer?.currentNode);
-    const xpGained = combatEnemy ? getXpReward(combatEnemy, currentNode) : 25;
+    const primaryEnemy = combatEnemies[0] ?? null;
+    const xpGained = primaryEnemy ? getXpReward(primaryEnemy, currentNode) : 25;
     const recapPlayers = buildCombatRecapPlayers(results);
     const xpStates = buildCombatXpStates(xpGained);
 
@@ -1413,7 +1405,7 @@ export default function EtherniaGame() {
         players: recapPlayers,
         xpStates,
         onCloseAction: () => {
-          setCombatEnemy(null);
+          setCombatEnemies([]);
           setPendingNodeInteraction(null);
           setCombatParticipants([]);
           setPhase("EVENT");
@@ -1421,7 +1413,7 @@ export default function EtherniaGame() {
           const nextFloor = currentFloor + 1;
 
           if (nextFloor > FLOORS.length) {
-            setCombatEnemy(null);
+            setCombatEnemies([]);
             setPendingNodeInteraction(null);
             setCombatParticipants([]);
             setVictory(true);
@@ -1465,7 +1457,7 @@ export default function EtherniaGame() {
       return;
     }
 
-    setCombatEnemy(null);
+    setCombatEnemies([]);
     setPendingNodeInteraction(null);
     setCombatParticipants([]);
 
@@ -1488,12 +1480,12 @@ export default function EtherniaGame() {
         });
 
         const isEliteSource =
-          combatEnemy?.sourceTag === "elite" ||
+          combatEnemies[0]?.sourceTag === "elite" ||
           currentNode?.eventType === "elite";
 
         if (isEliteSource) {
-          const rewardItem = combatEnemy?.rewardCategory
-            ? getEliteRewardByCategory(combatEnemy.rewardCategory)
+          const rewardItem = primaryEnemy?.rewardCategory
+            ? getEliteRewardByCategory(primaryEnemy.rewardCategory)
             : null;
 
           if (rewardItem) {
@@ -1508,7 +1500,7 @@ export default function EtherniaGame() {
           }
         }
 
-        if (combatEnemy?.grantsStatueOnWin) {
+        if (primaryEnemy?.grantsStatueOnWin) {
           setCurrentFloorStatues((prev) => Math.min(REQUIRED_STATUES, prev + 1));
 
           setNodes((prevNodes) =>
@@ -1532,7 +1524,7 @@ export default function EtherniaGame() {
             currentNode.eventType === "merchant_alchemist" ||
             currentNode.eventType === "merchant_mystic"
           ) &&
-          combatEnemy?.name.includes("corrompu")
+          primaryEnemy?.name.includes("corrompu")
         ) {
           setNodes((prevNodes) =>
             prevNodes.map((n) =>
@@ -1572,7 +1564,7 @@ export default function EtherniaGame() {
   const handleDefeatCombat = (results: CombatResultPlayer[]) => {
     const recapPlayers = buildCombatRecapPlayers(results);
 
-    setCombatEnemy(null);
+    setCombatEnemies([]);
     setPendingNodeInteraction(null);
     setCombatParticipants([]);
     setPendingEventNodeId(null);
@@ -1612,7 +1604,7 @@ export default function EtherniaGame() {
   const handleFleeCombat = (results: CombatResultPlayer[]) => {
     const recapPlayers = buildCombatRecapPlayers(results);
 
-    setCombatEnemy(null);
+    setCombatEnemies([]);
     setPendingNodeInteraction(null);
     setCombatParticipants([]);
 
@@ -1652,7 +1644,7 @@ export default function EtherniaGame() {
         case "Mage":
           return [PLAYER_PASSIVES.mana_surge()];
         case "Archer":
-          return [PLAYER_PASSIVES.eagle_eye()];
+          return [PLAYER_PASSIVES.survivor_instinct()];
         case "Voleur":
           return [PLAYER_PASSIVES.toxic_blade()];
         case "Demoniste":
@@ -1710,7 +1702,6 @@ export default function EtherniaGame() {
 
   const canTriggerNodeEvent = (node: MapNode) => {
     if (node.type === "start") return false;
-    if (node.kind === "stairs") return false;
     if (node.type === "boss") return true;
     if (isMerchantNode(node)) return true;
 
@@ -2023,10 +2014,10 @@ export default function EtherniaGame() {
               xpStates={combatResultModal.xpStates}
               onClose={closeCombatResultModal}
             />
-            {combatEnemy && combatPlayers.length > 0 && (
+            {combatEnemies.length > 0 && combatPlayers.length > 0 && (
               <CombatOverlay
                 players={combatPlayers}
-                enemy={combatEnemy}
+                enemies={combatEnemies}
                 onWin={(results) => {
                   handleWinCombat(results);
                 }}

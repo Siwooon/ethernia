@@ -5,19 +5,22 @@ export type LocationTheme = "forest" | "ruins" | "swamp" | "crypt" | "mountain" 
 export type ItemType = "consumable" | "equipment" | "material" | "relic";
 export type EnemyArchetype = "brute" | "assassin" | "mage" | "tank" | "leech";
 
-export type StatusEffectType = "poison" | "burn" | "shield" | "regen" | "weakness" | "frailty" | "silence" | "vulnerability";
+export type StatusEffectType = "poison" | "burn" | "shield" | "regen" | "weakness" | "frailty" | "silence" | "vulnerability" |"marked";
 export type MapEffectType = "wound" | "infection" | "blessing" | "protection" | "corruption_mark" | "fatigue" | "hex";
 
-export type GridNodeKind = "start" | "path" | "statuette" | "boss_prep" | "boss" | "stairs";
+export type GridNodeKind = "start" | "path" | "statuette" | "boss_prep" | "boss";
 export type NodeVisibility = "hidden" | "discovered" | "visited";
 export type EliteRewardCategory = "weapon" | "armor" | "relic" | "consumable" | "material" | "gold";
 export type EnemySourceTag = "normal" | "elite" | "statue_guardian" | "merchant_blacksmith_corrupted" | "merchant_alchemist_corrupted" | "merchant_mystic_corrupted" | "treasure_mimic" | "random_ambush";
 export type EventChoiceAction = "take_statue" | "purify_statue" | "absorb_statue" | "rest_sleep" | "rest_focus" | "rest_cleanse" | "treasure_open_safe" | "treasure_force" | "treasure_leave" | "shrine_bless" | "shrine_offer" | "shrine_revive" | "shrine_leave" | "random_help" | "random_search" | "random_ignore" | "engage_battle" | "wait_for_party";
 
-  export type EffectTrigger = "battle_start" | "turn_start" | "turn_end" | "before_attack" | "after_attack" | "on_hit" | "on_damaged" | "on_kill";
+export type EnemyAttackTarget = "player" | "enemy" | "all_players" | "all_enemies";
+export type EnemyTargetScope = "single_player" | "all_players" | "self" | "single_enemy_ally" | "all_enemy_allies";
+
+export type BossMechanicType = "feral_heart" | "tainted_oracle";
+
+export type EffectTrigger = "battle_start" | "turn_start" | "turn_end" | "before_attack" | "after_attack" | "on_hit" | "on_damaged" | "on_kill";
 export type TraitCategory = "passive" | "blessing" | "curse";
-
-
 
 export type TraitTrigger ="stats" | "battle_start" | "turn_start" | "turn_end" | "before_attack" | "after_attack" | "on_hit" | "on_damaged" | "on_kill";
 
@@ -87,16 +90,30 @@ export type SkillCondition =
 export type SkillExtraEffect =
   | {
       type: "apply_status";
-      status: StatusEffectType;
+      target: "player" | "enemy";
+      status: StatusEffect["type"];
       value: number;
       duration: number;
-      target: "player" | "enemy";
       chance?: number;
     }
   | {
       type: "heal_self";
-      percentDamageDealt?: number;
       flat?: number;
+      percentDamageDealt?: number;
+    }
+  | {
+      type: "taunt";
+      duration: number;
+    }
+  | {
+      type: "grant_shield_self";
+      value: number;
+      duration?: number;
+    }
+  | {
+      type: "grant_shield_team";
+      value: number;
+      duration?: number;
     };
 
 export type TerrainEffectType =
@@ -242,32 +259,72 @@ export interface Enemy {
   defense: number;
   speed: number;
   image: string;
-  statuses?: StatusEffect[];
-
+  statuses: StatusEffect[];
+  phaseTwoImage?: string;
+  
   archetype: EnemyArchetype;
   specialAttack?: string;
   attacks: EnemyAttack[];
-  passive?: string; // tu peux le garder juste pour l'affichage si tu veux
   passives: PassiveEffect[];
   traits?: TraitEffect[];
 
   rewardCategory?: EliteRewardCategory;
   sourceTag?: EnemySourceTag;
   grantsStatueOnWin?: boolean;
+
+  isBoss?: boolean;
+  bossMechanic?: BossMechanicType;
+  bossState?: BossState;
 }
+
+export type CombatEnemyState = {
+  enemyId: string;
+  enemy: Enemy;
+  stats: Stats;
+  statuses: StatusEffect[];
+  isDead: boolean;
+  summonSlot?: boolean;
+};
+
+export type SummonSpec = {
+  sourceTag?: EnemySourceTag;
+  count: number;
+  name?: string;
+  hp: number;
+  strength: number;
+  magic: number;
+  defense: number;
+  speed: number;
+  image: string;
+  archetype: EnemyArchetype;
+  attacks: EnemyAttack[];
+  passives?: PassiveEffect[];
+  rewardCategory?: EliteRewardCategory;
+};
 
 export type PlayerSkill = {
   id: string;
   name: string;
   icon: string;
+  description: string;
   manaCost: number;
   minLevel: number;
-  description: string;
   scaling: "strength" | "magic" | "hybrid";
   multiplier: number;
   ignoreDefense?: boolean;
   guaranteedCrit?: boolean;
-  conditions?: SkillCondition[];
+  conditions?: {
+    type:
+      | "target_status"
+      | "self_hp_below"
+      | "self_mana_above"
+      | "target_hp_below"
+      | "self_has_status";
+    status?: StatusEffect["type"];
+    threshold?: number;
+    bonusFlat?: number;
+    bonusMultiplier?: number;
+  }[];
   extraEffects?: SkillExtraEffect[];
 };
 
@@ -287,14 +344,29 @@ export interface EnemyAttack {
   critChance?: number;
   manaBurn?: number;
   selfHealPercent?: number;
+
+  skipDamage?: boolean;
+  hitCount?: number;
+  targetScope?: EnemyTargetScope;
+
+  summons?: SummonSpec;
+
   statusEffect?: {
     type: StatusEffectType;
     value: number;
     duration: number;
-    target: "player" | "enemy";
+    target: "player" | "enemy" | "all_players";
   };
 }
 
+export interface BossState {
+  phase: 1 | 2;
+  rage: number;
+  ritualCharge: number;
+  ritualBroken: boolean;
+  preyMarkedPlayerId: number | null;
+  patternStep: number;
+}
 export interface MapNode {
   id: number;
 
@@ -338,3 +410,11 @@ export interface ClassAbility {
   description: string;
 }
 
+export function normalizeEnemy(enemy: Enemy): Enemy {
+  return {
+    ...enemy,
+    statuses: enemy.statuses ?? [],
+    passives: enemy.passives ?? [],
+    attacks: enemy.attacks ?? [],
+  };
+}

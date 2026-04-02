@@ -1,7 +1,7 @@
 import { EventType, LocationTheme, MapNode, TerrainEffect } from "@/app/component/types/game";
 import { FloorBiome } from "@/app/component/data/floors";
 
-type GridKind = "start" | "path" | "statuette" | "boss_prep" | "boss" | "stairs";
+type GridKind = "start" | "path" | "statuette" | "boss_prep" | "boss";
 
 type TemplateCell = {
   row: number;
@@ -124,8 +124,6 @@ function toEventType(kind: GridKind): EventType {
       return "boss";
     case "boss_prep":
       return Math.random() < 0.7 ? "rest" : "scripted_shrine";
-    case "stairs":
-      return "none";
     default:
       return "battle";
   }
@@ -134,15 +132,13 @@ function toEventType(kind: GridKind): EventType {
 function toLabel(kind: GridKind): string {
   switch (kind) {
     case "start":
-      return "Début";
+      return "Camp";
     case "statuette":
       return "Statuette";
     case "boss_prep":
       return "Dernier refuge";
     case "boss":
       return "Boss";
-    case "stairs":
-      return "Sortie";
     default:
       return "";
   }
@@ -430,7 +426,6 @@ export function generateGridMap({
     { row: 3, col: 4, kind: "path", required: true },
     { row: 3, col: 5, kind: "boss_prep", required: true },
     { row: 3, col: 6, kind: "boss", required: true },
-    { row: 3, col: 7, kind: "stairs", required: true },
   ];
 
   core.forEach((cell) => addCell(cellMap, cell));
@@ -485,7 +480,6 @@ const { distances, neighbors } = computeDistances(cells, startCell);
 
   const bossPrepCell = cells.find((c) => c.kind === "boss_prep");
   const bossCell = cells.find((c) => c.kind === "boss");
-  const stairsCell = cells.find((c) => c.kind === "stairs");
 
   const candidates = cells.filter((cell) => {
     const key = keyOf(cell.row, cell.col);
@@ -498,7 +492,6 @@ const { distances, neighbors } = computeDistances(cells, startCell);
 
     if (bossPrepCell && manhattan(cell, bossPrepCell) <= 1) return false;
     if (bossCell && manhattan(cell, bossCell) <= 1) return false;
-    if (stairsCell && manhattan(cell, stairsCell) <= 1) return false;
 
     return true;
   });
@@ -531,7 +524,6 @@ const { distances, neighbors } = computeDistances(cells, startCell);
         if (distFromStart < 3) return false;
         if (bossPrepCell && manhattan(cell, bossPrepCell) <= 1) return false;
         if (bossCell && manhattan(cell, bossCell) <= 1) return false;
-        if (stairsCell && manhattan(cell, stairsCell) <= 1) return false;
 
         return true;
       })

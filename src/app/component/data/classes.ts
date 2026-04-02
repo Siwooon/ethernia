@@ -1,7 +1,7 @@
 import { ClassData, ClassType } from "@/app/component/types/game";
 
 export const CLASSES: Record<ClassType, ClassData> = {
-  Guerrier: { image: "https://api.dicebear.com/7.x/adventurer/png?seed=Guerrier&size=200&backgroundColor=5e2cb8", portrait: "https://api.dicebear.com/7.x/adventurer/png?seed=Guerrier&size=120&backgroundColor=3b1c7a", stats: { hp: 155, maxHp: 155, mana: 24, maxMana: 24, strength: 15, magic: 2, defense: 12, speed: 7 },
+  Guerrier: { image: "https://api.dicebear.com/7.x/adventurer/png?seed=Guerrier&size=200&backgroundColor=5e2cb8", portrait: "https://api.dicebear.com/7.x/adventurer/png?seed=Guerrier&size=120&backgroundColor=3b1c7a", stats: { hp: 155, maxHp: 155, mana: 24, maxMana: 24, strength: 100, magic: 2, defense: 12, speed: 7 },
   role: "Tank / protecteur / briseur de ligne",
   baseSkillName: "Coup de bouclier",
   signatureSkillName: "Verdict du bastion",

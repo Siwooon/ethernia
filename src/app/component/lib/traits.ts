@@ -41,45 +41,6 @@ function runSingleTrait(
   const logs: string[] = [];
 
   switch (trait.id) {
-    case "thorns": {
-      const reflected = trait.value ?? 0;
-
-      if (ctx.target === "player") {
-        enemy = {
-          ...enemy,
-          hp: Math.max(0, enemy.hp - reflected),
-        };
-        logs.push(`${trait.name} inflige ${reflected} dégâts à l'ennemi.`);
-      }
-
-      if (ctx.target === "enemy") {
-        player = {
-          ...player,
-          stats: {
-            ...player.stats,
-            hp: Math.max(0, player.stats.hp - reflected),
-          },
-        };
-        logs.push(`${trait.name} inflige ${reflected} dégâts au joueur.`);
-      }
-
-      break;
-    }
-
-    case "mana_shield": {
-      if (ctx.target === "player" && player.stats.mana > 0) {
-        const manaLoss = Math.min(player.stats.mana, trait.value ?? 0);
-        player = {
-          ...player,
-          stats: {
-            ...player.stats,
-            mana: Math.max(0, player.stats.mana - manaLoss),
-          },
-        };
-        logs.push(`${trait.name} consomme ${manaLoss} mana.`);
-      }
-      break;
-    }
 
     case "regen_turn": {
       const healValue = trait.value ?? 0;

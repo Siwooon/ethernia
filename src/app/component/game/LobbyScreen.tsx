@@ -47,7 +47,17 @@ export default function LobbyScreen({
     setParticles(generatedParticles);
   }, []);
   const selectedClassData = CLASSES[selectedClass];
+  const normalizedPlayerName = playerName.trim().toLowerCase();
 
+  const nameAlreadyUsed =
+    normalizedPlayerName.length > 0 &&
+    players.some((p) => p.name.trim().toLowerCase() === normalizedPlayerName);
+
+  const nameTooShort = playerName.trim().length > 0 && playerName.trim().length < 2;
+  const canAddPlayer =
+    playerName.trim().length >= 2 &&
+    !nameAlreadyUsed &&
+    players.length < 4;
   return(
     <motion.div
       key="lobby"
@@ -224,14 +234,28 @@ export default function LobbyScreen({
                 ))}
               </select>
 
-              <button
-                onClick={addPlayer}
-                disabled={players.length >= 4}
+            <button
+              onClick={addPlayer}
+              disabled={!canAddPlayer}
                 className="bg-violet-700 px-6 py-3 rounded-xl text-white font-bold hover:bg-violet-600 border border-violet-400 disabled:opacity-50 transition-all shadow-[0_0_18px_rgba(168,85,247,0.25)]"
               >
                 Ajouter
               </button>
             </div>
+              {playerName.trim().length > 0 && (
+                <div className="mb-4 text-sm">
+                  {nameTooShort && (
+                    <div className="text-amber-300">
+                      Le nom doit contenir au moins 2 caractères.
+                    </div>
+                  )}
+                  {!nameTooShort && nameAlreadyUsed && (
+                    <div className="text-red-300">
+                      Ce nom est déjà utilisé. Choisis-en un autre.
+                    </div>
+                  )}
+                </div>
+              )}
             <div className="rounded-2xl border border-violet-800 bg-[#1b0a3d]/70 p-4 mb-5">
               <div className="flex items-start gap-3">
                 <img
