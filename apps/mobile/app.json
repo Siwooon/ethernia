@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Ethernia",
+    "slug": "ethernia-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.ethernia.mobile",
+      "buildNumber": "1"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/branding/ethernia_icon.png",
+        "backgroundColor": "#120a1f"
+      },
+      "package": "com.ethernia.mobile",
+      "permissions": [],
+      "versionCode": 1
+    },
+    "icon": "./src/assets/branding/ethernia_icon.png",
+    "scheme": "ethernia",
+    "description": "Roguelike fantasy coop mobile dans le royaume fracturé d’Ethernia.",
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./src/assets/branding/ethernia_splash.png",
+          "resizeMode": "cover",
+          "backgroundColor": "#120a1f"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "886e3b77-6d27-45dc-9fba-fc216cf5cf98"
+      }
+    }
+  }
+}

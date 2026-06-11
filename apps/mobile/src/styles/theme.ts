@@ -1,0 +1,41 @@
+export const mobileTheme = {
+  colors: {
+    background: "#120a1f",
+    panel: "rgba(30, 20, 45, 0.92)",
+    panelStrong: "rgba(50, 32, 74, 0.96)",
+    surface: "rgba(255,255,255,0.07)",
+    surfaceStrong: "rgba(255,255,255,0.11)",
+    text: "#f8f0ff",
+    muted: "#c6b7d8",
+    accent: "#f6c453",
+    success: "#4ade80",
+    warning: "#fbbf24",
+    danger: "#ff6b6b",
+    mana: "#a78bfa",
+    border: "rgba(246, 196, 83, 0.24)",
+    borderSoft: "rgba(255,255,255,0.10)",
+  },
+  spacing: {
+    xs: 6,
+    sm: 10,
+    md: 16,
+    lg: 24,
+    xl: 32,
+  },
+  radius: {
+    sm: 10,
+    md: 14,
+    lg: 22,
+    xl: 30,
+  },
+  touch: {
+    minimumTarget: 44,
+    comfortableTarget: 52,
+  },
+  typography: {
+    title: 28,
+    subtitle: 18,
+    body: 15,
+    caption: 12,
+  },
+};
